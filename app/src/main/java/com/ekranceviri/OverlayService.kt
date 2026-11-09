@@ -22,13 +22,24 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlin.math.abs
 
 class OverlayService : Service() {
@@ -36,12 +47,16 @@ class OverlayService : Service() {
     private lateinit var lp: WindowManager.LayoutParams
     private val handler = Handler(Looper.getMainLooper())
     private var button: TextView? = null
+    private var overlay: View? = null
     private var projection: MediaProjection? = null
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
     private var wantShot = false
+    private var busy = false
     private var width = 0
     private var height = 0
+    private val translators = HashMap<String, Translator>()
+    private val dismissRunnable = Runnable { dismissOverlay() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -60,6 +75,10 @@ class OverlayService : Service() {
         setupCapture()
         addButton()
         return START_NOT_STICKY
+    }
+
+    private fun toast(t: String) {
+        Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
     }
 
     private fun startAsForeground() {
@@ -116,6 +135,9 @@ class OverlayService : Service() {
     }
 
     private fun takeShot() {
+        if (busy) return
+        busy = true
+        dismissOverlay()
         button?.visibility = View.INVISIBLE
         handler.postDelayed({
             wantShot = true
@@ -125,30 +147,134 @@ class OverlayService : Service() {
         handler.postDelayed({
             if (wantShot) {
                 wantShot = false
+                busy = false
                 button?.visibility = View.VISIBLE
-                Toast.makeText(this, "Görüntü alınamadı, tekrar dene", Toast.LENGTH_SHORT).show()
+                toast("Görüntü alınamadı, tekrar dene")
             }
         }, 2000)
     }
 
     private fun onShot(bmp: Bitmap) {
         button?.visibility = View.VISIBLE
-        Toast.makeText(this, "Ekran görüntüsü alındı: ${bmp.width}x${bmp.height}", Toast.LENGTH_SHORT).show()
-        val iv = ImageView(this).apply {
-            setImageBitmap(bmp)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(Color.RED)
-            setPadding(4, 4, 4, 4)
+        val rec = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        rec.process(InputImage.fromBitmap(bmp, 0))
+            .addOnSuccessListener { res ->
+                if (res.text.isBlank()) {
+                    busy = false
+                    toast("Yazı bulunamadı")
+                } else {
+                    detectAndTranslate(res)
+                }
+            }
+            .addOnFailureListener {
+                busy = false
+                toast("OCR hatası: ${it.message}")
+            }
+    }
+
+    private fun detectAndTranslate(res: Text) {
+        LanguageIdentification.getClient()
+            .identifyLanguage(res.text.take(500))
+            .addOnSuccessListener { tag ->
+                val src = if (tag == "und") TranslateLanguage.ENGLISH
+                else TranslateLanguage.fromLanguageTag(tag)
+                if (src == null || src == TranslateLanguage.TURKISH) {
+                    busy = false
+                    toast("Çevrilecek yabancı yazı bulunamadı (dil: $tag)")
+                } else {
+                    translateBlocks(res, src)
+                }
+            }
+            .addOnFailureListener {
+                busy = false
+                toast("Dil algılanamadı: ${it.message}")
+            }
+    }
+
+    private fun translateBlocks(res: Text, src: String) {
+        val translator = translators.getOrPut(src) {
+            Translation.getClient(
+                TranslatorOptions.Builder()
+                    .setSourceLanguage(src)
+                    .setTargetLanguage(TranslateLanguage.TURKISH)
+                    .build()
+            )
+        }
+        toast("Çevriliyor... (ilk seferde dil paketi iner, biraz sürebilir)")
+        translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
+            .addOnSuccessListener {
+                val blocks = res.textBlocks.filter { it.boundingBox != null }
+                if (blocks.isEmpty()) {
+                    busy = false
+                    toast("Yazı bulunamadı")
+                } else {
+                    val results = arrayOfNulls<String>(blocks.size)
+                    var left = blocks.size
+                    blocks.forEachIndexed { i, b ->
+                        val original = b.text.replace("\n", " ")
+                        translator.translate(original).addOnCompleteListener { t ->
+                            results[i] = if (t.isSuccessful) t.result else original
+                            left--
+                            if (left == 0) showOverlay(blocks, results)
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener {
+                busy = false
+                toast("Dil paketi inemedi, internet var mı? ${it.message}")
+            }
+    }
+
+    private fun showOverlay(blocks: List<Text.TextBlock>, results: Array<String?>) {
+        val root = FrameLayout(this)
+        root.setOnClickListener { dismissOverlay() }
+        blocks.forEachIndexed { i, b ->
+            val r = b.boundingBox ?: return@forEachIndexed
+            val lines = maxOf(1, b.lines.size)
+            val px = (r.height().toFloat() / lines * 0.6f).coerceIn(22f, 64f)
+            val tv = TextView(this).apply {
+                text = results[i]
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, px)
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.argb(235, 0, 0, 0))
+                setPadding(8, 4, 8, 4)
+            }
+            val p = FrameLayout.LayoutParams(
+                maxOf(r.width(), 120), FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+            p.leftMargin = r.left
+            p.topMargin = r.top
+            root.addView(tv, p)
         }
         val plp = WindowManager.LayoutParams(
-            width / 3, height / 3,
+            width, height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.END }
-        wm.addView(iv, plp)
-        handler.postDelayed({ try { wm.removeView(iv) } catch (e: Exception) {} }, 3000)
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            if (Build.VERSION.SDK_INT >= 28) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        wm.addView(root, plp)
+        overlay = root
+        button?.let {
+            wm.removeView(it)
+            wm.addView(it, lp)
+        }
+        handler.postDelayed(dismissRunnable, 10000)
+        busy = false
+    }
+
+    private fun dismissOverlay() {
+        handler.removeCallbacks(dismissRunnable)
+        overlay?.let { try { wm.removeView(it) } catch (e: Exception) {} }
+        overlay = null
     }
 
     private fun addButton() {
@@ -208,7 +334,9 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
+        dismissOverlay()
         button?.let { try { wm.removeView(it) } catch (e: Exception) {} }
+        translators.values.forEach { it.close() }
         display?.release()
         reader?.close()
         projection?.stop()
