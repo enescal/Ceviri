@@ -554,7 +554,7 @@ class OverlayService : Service() {
             val tr = result[i] ?: item.text
             val bgC = sampleColor(bmp, r)
             val lum = 0.299 * Color.red(bgC) + 0.587 * Color.green(bgC) + 0.114 * Color.blue(bgC)
-            val maxPx = (r.height().toFloat() / item.lines * 0.7f).coerceIn(24f, 72f)
+            val maxPx = (r.height().toFloat() / item.lines * 0.7f).coerceIn(24f, 64f)
             val tv = TextView(this)
             tv.text = tr
             tv.setTextColor(if (lum > 140) Color.BLACK else Color.WHITE)
