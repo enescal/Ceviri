@@ -1,6 +1,7 @@
 package com.ekranceviri
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -215,6 +216,9 @@ class MainActivity : Activity() {
         c1.addView(etGemini)
         etModel = edit("Gemini modeli (varsayılan: gemini-flash-latest)")
         c1.addView(etModel)
+        val btnTest = button("Gemini anahtarını test et", false)
+        btnTest.setOnClickListener { testGemini() }
+        c1.addView(btnTest)
 
         // Ne çevrilsin
         val c2 = card(root, "Ne çevrilsin?")
@@ -356,6 +360,34 @@ class MainActivity : Activity() {
         }
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(mpm.createScreenCaptureIntent(), 100)
+    }
+
+    private fun testGemini() {
+        saveAll()
+        val key = prefs.geminiKey
+        if (key.isBlank()) {
+            Toast.makeText(this, "Önce Gemini anahtarını yaz", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "Test ediliyor...", Toast.LENGTH_SHORT).show()
+        val model = prefs.geminiModel
+        Thread {
+            val t0 = System.currentTimeMillis()
+            val out = Gemini.translate(key, model, listOf("Hello, how are you today?"))
+            val ms = System.currentTimeMillis() - t0
+            runOnUiThread {
+                val msg = if (out == null) {
+                    "HATA: ${Gemini.lastError}\n\nModel: $model"
+                } else {
+                    "Çalışıyor ($ms ms)\n\n${out[0]}"
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Gemini testi")
+                    .setMessage(msg)
+                    .setPositiveButton("Tamam", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun savePhoto(uri: Uri) {
