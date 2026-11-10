@@ -122,8 +122,18 @@ class OverlayService : Service() {
 
     // Otomatik mod durumu
     private var prevFp: IntArray? = null      // bir önceki kontrolde ekranın parmak izi
-    private var overlayFp: IntArray? = null   // çeviri açıkken ekranın parmak izi
     private var handledFp: IntArray? = null   // en son işlenen ekranın parmak izi
+
+    // Kaydırmayı izleme
+    private var overlayRects: List<Rect> = emptyList()
+    private var overlayShift = 0
+    private var lastGray: IntArray? = null
+    private var lastGrayShift = 0
+    private var scrolled = false
+    private var gridW = 1
+    private var gridH = 1
+    private var gridK = 6
+    private var lastErrToast = 0L
 
     private var lastTap = 0L
     private var pendingTap: Runnable? = null
@@ -285,23 +295,29 @@ class OverlayService : Service() {
         busy = false
         restoreViews()
         handler.removeCallbacks(autoRunnable)
-        if (autoOn) handler.postDelayed(autoRunnable, 800)
+        if (autoOn) handler.postDelayed(autoRunnable, if (overlay != null) 350L else 500L)
     }
 
     private fun resetAutoState() {
         prevFp = null
-        overlayFp = null
         handledFp = null
+        lastGray = null
+        lastGrayShift = 0
+        overlayShift = 0
+        scrolled = false
         lastSpoken = ""
     }
 
-    private fun fail(msg: String, auto: Boolean) {
-        toast(msg)
-        if (auto) {
-            autoOn = false
-            resetAutoState()
-            updateButtonLook()
+    private fun errToast(msg: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastErrToast > 15000) {
+            lastErrToast = now
+            toast(msg)
         }
+    }
+
+    private fun fail(msg: String, auto: Boolean) {
+        if (auto) errToast(msg) else toast(msg)
         done()
     }
 
@@ -351,20 +367,7 @@ class OverlayService : Service() {
         val fp = fingerprint(bmp, regs)
 
         if (overlay != null) {
-            val base = overlayFp
-            if (base == null) {
-                overlayFp = fp
-                done()
-                return
-            }
-            if (changed(base, fp)) {
-                // sayfa kaydı ya da değişti: eski çeviriyi hemen kaldır
-                dismissOverlay()
-                overlayFp = null
-                prevFp = null
-                handledFp = null
-            }
-            done()
+            trackOverlay(bmp)
             return
         }
 
@@ -387,6 +390,141 @@ class OverlayService : Service() {
             if (clean == null || !autoOn) {
                 done()
             } else {
+                process(clean, true)
+            }
+        }
+    }
+
+    // ---------- Kaydırmayı izleme ----------
+
+    private fun grayGrid(bmp: Bitmap): IntArray {
+        val k = 6
+        val gw = max(1, bmp.width / k)
+        val gh = max(1, bmp.height / k)
+        val small = Bitmap.createScaledBitmap(bmp, gw, gh, true)
+        val px = IntArray(gw * gh)
+        small.getPixels(px, 0, gw, 0, 0, gw, gh)
+        for (i in px.indices) {
+            val c = px[i]
+            px[i] = (Color.red(c) * 30 + Color.green(c) * 59 + Color.blue(c) * 11) / 100
+        }
+        gridW = gw
+        gridH = gh
+        gridK = k
+        return px
+    }
+
+    // Çevirinin kapladığı yerleri (eski ve yeni konumda) hesaba katmadan karşılaştırmak için
+    private fun buildMask(sa: Int, sb: Int): BooleanArray {
+        val m = BooleanArray(gridW * gridH)
+        for (r in overlayRects) {
+            for (s in intArrayOf(sa, sb)) {
+                val x0 = max(0, r.left / gridK - 1)
+                val x1 = min(gridW, r.right / gridK + 2)
+                val y0 = max(0, (r.top + s) / gridK - 1)
+                val y1 = min(gridH, (r.bottom + s) / gridK + 2)
+                for (y in y0 until y1) {
+                    for (x in x0 until x1) m[y * gridW + x] = true
+                }
+            }
+        }
+        return m
+    }
+
+    private fun grayChanged(a: IntArray, b: IntArray, mask: BooleanArray): Boolean {
+        var diff = 0
+        for (i in a.indices) {
+            if (!mask[i] && abs(a[i] - b[i]) > 30) diff++
+        }
+        return diff > max(3, a.size / 500)
+    }
+
+    // Sayfa kaç hücre kaydı? Güvenilir değilse null.
+    private fun estimateShift(a: IntArray, b: IntArray, mask: BooleanArray): Int? {
+        val w = gridW
+        val h = gridH
+        val maxD = h / 2
+        var bestDy = 0
+        var bestAvg = Double.MAX_VALUE
+        var zeroAvg = Double.MAX_VALUE
+        val minCount = (w / 2) * (h / 6)
+        for (i in 0..(2 * maxD)) {
+            val dy = if (i % 2 == 1) -((i + 1) / 2) else i / 2
+            val y0 = max(0, -dy)
+            val y1 = min(h, h - dy)
+            var sum = 0L
+            var cnt = 0
+            var y = y0
+            while (y < y1) {
+                val ra = y * w
+                val rb = (y + dy) * w
+                var x = 0
+                while (x < w) {
+                    if (!mask[ra + x] && !mask[rb + x]) {
+                        sum += abs(a[ra + x] - b[rb + x])
+                        cnt++
+                    }
+                    x += 2
+                }
+                y++
+            }
+            if (cnt < minCount) continue
+            val avg = sum.toDouble() / cnt
+            if (dy == 0) zeroAvg = avg
+            if (avg < bestAvg - 0.05) {
+                bestAvg = avg
+                bestDy = dy
+            }
+        }
+        if (bestDy == 0) return 0
+        if (bestAvg > 12.0) return null
+        if (zeroAvg - bestAvg < 3.0) return null
+        return bestDy
+    }
+
+    // Çeviri ekrandayken sayfa kayarsa çeviriyi de kaydırır, kayma durunca yeniler.
+    private fun trackOverlay(bmp: Bitmap) {
+        val g = grayGrid(bmp)
+        val before = lastGray
+        val shiftNow = overlayShift
+        val shiftBefore = lastGrayShift
+        lastGray = g
+        lastGrayShift = shiftNow
+        if (before == null || before.size != g.size) {
+            done()
+            return
+        }
+        val mask = buildMask(shiftBefore, shiftNow)
+        if (!grayChanged(before, g, mask)) {
+            if (scrolled) {
+                scrolled = false
+                refreshAuto()
+            } else {
+                done()
+            }
+            return
+        }
+        val dy = estimateShift(before, g, mask)
+        if (dy == null || dy == 0) {
+            // takip edilemedi: eski çeviriyi kaldır, ekran durunca yeniden çevrilir
+            dismissOverlay()
+            resetAutoState()
+            done()
+            return
+        }
+        overlayShift += dy * gridK
+        overlay?.translationY = overlayShift.toFloat()
+        scrolled = true
+        done()
+    }
+
+    private fun refreshAuto() {
+        capture(true) { clean ->
+            restoreViews()
+            if (clean == null || !autoOn) {
+                done()
+            } else {
+                handledFp = fingerprint(clean, regions())
                 process(clean, true)
             }
         }
@@ -484,7 +622,7 @@ class OverlayService : Service() {
         val ign = prefs.ignored()
         val items = all.filter { !ign.contains(norm(it.text)) }
         if (items.isEmpty()) {
-            if (!auto) toast("Yazı bulunamadı")
+            if (!auto) toast("Yazı bulunamadı") else dismissOverlay()
             done()
             return
         }
@@ -492,7 +630,7 @@ class OverlayService : Service() {
         langId.identifyLanguage(sample)
             .addOnSuccessListener { tag ->
                 if (tag == "tr") {
-                    if (!auto) toast("Çevrilecek yabancı yazı bulunamadı")
+                    if (!auto) toast("Çevrilecek yabancı yazı bulunamadı") else dismissOverlay()
                     done()
                 } else {
                     val src = if (tag == "und") TranslateLanguage.ENGLISH
@@ -525,8 +663,8 @@ class OverlayService : Service() {
         }
         if (cache.size > 600) cache.clear()
         when (eng) {
-            "deepl" -> deeplTranslate(bmp, items, result, missing, auto)
-            "gemini" -> geminiTranslate(bmp, items, result, missing, auto)
+            "deepl" -> deeplTranslate(bmp, items, result, missing, src, auto)
+            "gemini" -> geminiTranslate(bmp, items, result, missing, src, auto)
             else -> offlineTranslate(bmp, items, result, missing, src, auto)
         }
     }
@@ -565,9 +703,18 @@ class OverlayService : Service() {
             }
     }
 
+    // İnternetli motor hata verirse çeviri durmasın, internetsiz motora geç
+    private fun fallbackOffline(
+        msg: String, bmp: Bitmap, items: List<Item>, result: Array<String?>,
+        missing: List<Int>, src: String, auto: Boolean
+    ) {
+        errToast("$msg — internetsiz çeviriye geçildi")
+        offlineTranslate(bmp, items, result, missing, src, auto)
+    }
+
     private fun deeplTranslate(
         bmp: Bitmap, items: List<Item>, result: Array<String?>,
-        missing: List<Int>, auto: Boolean
+        missing: List<Int>, src: String, auto: Boolean
     ) {
         val key = prefs.deeplKey
         if (key.isBlank()) {
@@ -582,7 +729,7 @@ class OverlayService : Service() {
             val out = DeepL.translate(key, payload)
             handler.post {
                 if (out == null || out.size != payload.size) {
-                    fail("DeepL hatası: ${DeepL.lastError}", auto)
+                    fallbackOffline("DeepL hatası: ${DeepL.lastError}", bmp, items, result, missing, src, auto)
                 } else {
                     for (n in missing.indices) {
                         val t = Names.clean(out[n])
@@ -597,7 +744,7 @@ class OverlayService : Service() {
 
     private fun geminiTranslate(
         bmp: Bitmap, items: List<Item>, result: Array<String?>,
-        missing: List<Int>, auto: Boolean
+        missing: List<Int>, src: String, auto: Boolean
     ) {
         val key = prefs.geminiKey
         if (key.isBlank()) {
@@ -611,7 +758,7 @@ class OverlayService : Service() {
             val out = Gemini.translate(key, model, payload)
             handler.post {
                 if (out == null || out.size != payload.size) {
-                    fail("Gemini hatası: ${Gemini.lastError}", auto)
+                    fallbackOffline("Gemini hatası: ${Gemini.lastError}", bmp, items, result, missing, src, auto)
                 } else {
                     for (n in missing.indices) {
                         val t = out[n]
@@ -674,8 +821,15 @@ class OverlayService : Service() {
         handler.removeCallbacks(dismissRunnable)
         if (!auto) handler.postDelayed(dismissRunnable, 10000)
         if (auto) {
-            // çeviri ekranda: bir sonraki kontrolde yeni taban parmak izi alınacak
-            overlayFp = null
+            // çeviri ekranda: kaydırma izleme sıfırdan başlar
+            overlayRects = items.map {
+                val r = it.rect
+                Rect(r.left, r.top - 4, r.left + max(r.width(), 120), r.bottom + 4)
+            }
+            overlayShift = 0
+            lastGray = null
+            lastGrayShift = 0
+            scrolled = false
             prevFp = null
         }
 
