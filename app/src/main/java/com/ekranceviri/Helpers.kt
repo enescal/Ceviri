@@ -216,14 +216,14 @@ object Gemini {
         var i = 0
         while (i < texts.size) {
             val chunk = texts.subList(i, minOf(i + 30, texts.size))
-            val r = post(key, model, chunk) ?: return null
+            val r = post(key, model, chunk, true) ?: return null
             out.addAll(r)
             i += 30
         }
         return out
     }
 
-    private fun post(key: String, model: String, chunk: List<String>): List<String>? {
+    private fun post(key: String, model: String, chunk: List<String>, thinkOff: Boolean): List<String>? {
         return try {
             val input = JSONArray()
             for (t in chunk) input.put(t)
@@ -240,12 +240,11 @@ object Gemini {
                     )
                 )
             )
-            body.put(
-                "generationConfig",
-                JSONObject()
-                    .put("temperature", 0.2)
-                    .put("responseMimeType", "application/json")
-            )
+            val gc = JSONObject()
+                .put("temperature", 0.2)
+                .put("responseMimeType", "application/json")
+            if (thinkOff) gc.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+            body.put("generationConfig", gc)
             val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
                 URLEncoder.encode(model, "UTF-8") + ":generateContent"
             val c = URL(url).openConnection() as HttpURLConnection
@@ -258,13 +257,18 @@ object Gemini {
             c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val code = c.responseCode
             if (code != 200) {
-                lastError = when (code) {
-                    400 -> "istek veya anahtar hatalı"
-                    401, 403 -> "anahtar geçersiz"
-                    404 -> "model bulunamadı ($model)"
-                    429 -> "kota doldu ya da çok sık istek"
-                    else -> "hata kodu $code"
+                val err = try {
+                    c.errorStream?.bufferedReader()?.readText() ?: ""
+                } catch (e: Exception) {
+                    ""
                 }
+                if (code == 400 && thinkOff) return post(key, model, chunk, false)
+                val msg = try {
+                    JSONObject(err).getJSONObject("error").optString("message")
+                } catch (e: Exception) {
+                    ""
+                }
+                lastError = "kod $code: " + msg.take(160)
                 return null
             }
             val txt = c.inputStream.bufferedReader().readText()
@@ -284,7 +288,7 @@ object Gemini {
             for (k in 0 until arr.length()) res.add(arr.getString(k))
             res
         } catch (e: Exception) {
-            lastError = "bağlantı veya yanıt hatası"
+            lastError = "bağlantı/yanıt hatası: " + (e.message ?: "").take(80)
             null
         }
     }
