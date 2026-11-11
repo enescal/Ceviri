@@ -207,6 +207,7 @@ object DeepL {
 
 object Gemini {
     @Volatile var lastError = ""
+    @Volatile var lastModelVersion = ""
 
     private const val SYSTEM =
         "Translate every item from its original language into natural, fluent Turkish. " +
@@ -221,6 +222,7 @@ object Gemini {
             return null
         }
         val safeModel = model.trim().ifBlank { "gemini-3.8-flash" }
+        lastModelVersion = ""
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
@@ -293,6 +295,7 @@ object Gemini {
 
                 val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                 val root = JSONObject(responseText)
+                lastModelVersion = root.optString("modelVersion", model)
                 val candidates = root.optJSONArray("candidates")
                 if (candidates == null || candidates.length() == 0) {
                     lastError = "Gemini boş yanıt verdi: " +
