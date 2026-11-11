@@ -73,14 +73,23 @@ object HyMtEngine {
             val language = sourceCode.substringBefore("-").lowercase(Locale.ROOT)
             val targetName = "Turkish"
             val prompt = if (language == "zh") {
-                START_TOKEN + USER_TOKEN + "将以下文本翻译为土耳其语，注意只需要输出翻译后的结果，不要额外解释：\\n\\n" + text + ASSISTANT_TOKEN
+                START_TOKEN + USER_TOKEN + "将以下文本翻译为土耳其语，注意只需要输出翻译后的结果，不要额外解释：\n\n" + text + ASSISTANT_TOKEN
             } else {
-                START_TOKEN + USER_TOKEN + "Translate the following segment into " + targetName + ", without additional explanation.\\n\\n" + text + ASSISTANT_TOKEN
+                START_TOKEN + USER_TOKEN + "Translate the following segment into " + targetName + ", without additional explanation.\n\n" + text + ASSISTANT_TOKEN
             }
             val encoded = tok.encode(arrayOf(prompt), false, false)
             val promptIds = encoded.ids.map { it.toInt() }.toIntArray()
             check(promptIds.isNotEmpty()) { "HY-MT metni tokenlara ayıramadı" }
             val eos = tok.encode(arrayOf(EOS_TOKEN), false, false).ids.first().toInt()
+            val inputNames = ort.inputNames
+            val outputNames = ort.outputNames
+            check("input_ids" in inputNames && "attention_mask" in inputNames) {
+                "HY-MT ONNX giriş şeması beklenenden farklı: ${inputNames.joinToString()}"
+            }
+            check("logits" in outputNames && "present.0.key" in outputNames && "present.0.value" in outputNames) {
+                "HY-MT ONNX çıkış şeması beklenenden farklı: ${outputNames.joinToString()}"
+            }
+            val hasPositionIds = "position_ids" in inputNames
             val generated = ArrayList<Long>()
             var currentIds = promptIds.map { it.toLong() }.toLongArray()
             var attentionLength = promptIds.size
@@ -94,6 +103,14 @@ object HyMtEngine {
                     val inputs = HashMap<String, OnnxTensor>()
                     inputs["input_ids"] = idsTensor
                     inputs["attention_mask"] = maskTensor
+                    var positionTensor: OnnxTensor? = null
+                    if (hasPositionIds) {
+                        val positions = if (currentIds.size == promptIds.size) {
+                            LongArray(currentIds.size) { it.toLong() }
+                        } else longArrayOf((attentionLength - 1).toLong())
+                        positionTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(positions), longArrayOf(1, positions.size.toLong()))
+                        inputs["position_ids"] = positionTensor
+                    }
                     for (layer in 0 until LAYERS) {
                         val keyName = "past_key_values.$layer.key"
                         val valueName = "past_key_values.$layer.value"
@@ -108,12 +125,23 @@ object HyMtEngine {
                     val next = try { ort.run(inputs) } finally {
                         idsTensor.close()
                         maskTensor.close()
+                        positionTensor?.close()
                     }
                     previous?.close()
                     previous = next
                     val logitsTensor = next.get("logits").get() as OnnxTensor
-                    val logits = logitsTensor.value as Array<Array<FloatArray>>
-                    val last = logits[0][logits[0].lastIndex]
+                    val logitsValue = logitsTensor.value
+                    val last = when (logitsValue) {
+                        is Array<*> -> {
+                            val first = logitsValue[0]
+                            when (first) {
+                                is Array<*> -> (first[first.lastIndex] as FloatArray)
+                                is FloatArray -> first
+                                else -> error("HY-MT logits tensör biçimi desteklenmiyor: ${first?.javaClass?.name}")
+                            }
+                        }
+                        else -> error("HY-MT logits çıkışı beklenmeyen türde: ${logitsValue?.javaClass?.name}")
+                    }
                     var bestId = 0
                     var bestScore = Float.NEGATIVE_INFINITY
                     for (i in last.indices) {
