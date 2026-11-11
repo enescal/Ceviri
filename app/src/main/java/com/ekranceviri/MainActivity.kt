@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
+import android.text.InputType
 import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -223,8 +224,10 @@ class MainActivity : Activity() {
         g1.addView(rbGemini)
         c1.addView(g1)
         etDeepl = edit("DeepL anahtarı (:fx ile biter)")
+        etDeepl.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         c1.addView(etDeepl)
         etGemini = edit("Gemini anahtarı (aistudio.google.com)")
+        etGemini.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         c1.addView(etGemini)
         etModel = edit("Gemini modeli (varsayılan: gemini-3.8-flash)")
         c1.addView(etModel)
