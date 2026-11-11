@@ -4,8 +4,5 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#00D982</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowSplashScreenBackground">#07152F</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_brand_mark</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#07152F</item>
     </style>
 </resources>
