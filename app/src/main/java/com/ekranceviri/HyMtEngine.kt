@@ -22,6 +22,7 @@ object HyMtEngine {
     private const val EOS_TOKEN = "<｜hy_place▁holder▁no▁2｜>"
     private const val START_TOKEN = "<｜hy_begin▁of▁sentence｜>"
     private const val USER_TOKEN = "<｜hy_User｜>"
+    private const val END_TURN_TOKEN = "<｜hy_end▁of▁turn｜>"
     private const val ASSISTANT_TOKEN = "<｜hy_Assistant｜>"
 
     @Volatile private var environment: OrtEnvironment? = null
@@ -73,9 +74,9 @@ object HyMtEngine {
             val language = sourceCode.substringBefore("-").lowercase(Locale.ROOT)
             val targetName = "Turkish"
             val prompt = if (language == "zh") {
-                START_TOKEN + USER_TOKEN + "将以下文本翻译为土耳其语，注意只需要输出翻译后的结果，不要额外解释：\n\n" + text + ASSISTANT_TOKEN
+                START_TOKEN + USER_TOKEN + "将以下文本翻译为土耳其语，注意只需要输出翻译后的结果，不要额外解释：\n\n" + text + END_TURN_TOKEN + ASSISTANT_TOKEN
             } else {
-                START_TOKEN + USER_TOKEN + "Translate the following segment into " + targetName + ", without additional explanation.\n\n" + text + ASSISTANT_TOKEN
+                START_TOKEN + USER_TOKEN + "Translate the following segment into " + targetName + ", without additional explanation.\n\n" + text + END_TURN_TOKEN + ASSISTANT_TOKEN
             }
             val encoded = tok.encode(arrayOf(prompt), false, false)
             val promptIds = encoded.ids.map { it.toInt() }.toIntArray()
@@ -86,8 +87,14 @@ object HyMtEngine {
             check("input_ids" in inputNames && "attention_mask" in inputNames) {
                 "HY-MT ONNX giriş şeması beklenenden farklı: ${inputNames.joinToString()}"
             }
-            check("logits" in outputNames && "present.0.key" in outputNames && "present.0.value" in outputNames) {
-                "HY-MT ONNX çıkış şeması beklenenden farklı: ${outputNames.joinToString()}"
+            val missingCacheInputs = (0 until LAYERS).flatMap { layer ->
+                listOf("past_key_values.$layer.key", "past_key_values.$layer.value")
+            }.filterNot { it in inputNames }
+            val missingCacheOutputs = (0 until LAYERS).flatMap { layer ->
+                listOf("present.$layer.key", "present.$layer.value")
+            }.filterNot { it in outputNames }
+            check("logits" in outputNames && missingCacheInputs.isEmpty() && missingCacheOutputs.isEmpty()) {
+                "HY-MT ONNX önbellek şeması uyumsuz. Eksik girdiler: " + missingCacheInputs.joinToString() + "; eksik çıktılar: " + missingCacheOutputs.joinToString()
             }
             val hasPositionIds = "position_ids" in inputNames
             val generated = ArrayList<Long>()
