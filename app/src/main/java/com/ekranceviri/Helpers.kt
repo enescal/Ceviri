@@ -172,8 +172,8 @@ object DeepL {
             for (t in chunk) body.append("&text=").append(URLEncoder.encode(t, "UTF-8"))
             val c = URL("https://$host/v2/translate").openConnection() as HttpURLConnection
             c.requestMethod = "POST"
-            c.connectTimeout = 8000
-            c.readTimeout = 15000
+            c.connectTimeout = 15000
+            c.readTimeout = 30000
             c.doOutput = true
             c.setRequestProperty("Authorization", "DeepL-Auth-Key $key")
             c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
