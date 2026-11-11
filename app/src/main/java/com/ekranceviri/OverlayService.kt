@@ -1164,6 +1164,8 @@ class OverlayService : Service() {
     override fun onDestroy() {
         autoOn = false
         handler.removeCallbacksAndMessages(null)
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = null
         if (this::wm.isInitialized) {
             dismissOverlay()
             editor?.let {
