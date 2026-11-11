@@ -652,7 +652,10 @@ class OverlayService : Service() {
                     mergeOcrItems(collected)
                 } else null
             }
-            if (result != null) cb(result)
+            if (result != null) {
+                if (!bmp.isRecycled) bmp.recycle()
+                cb(result)
+            }
         }
 
         for (recognizer in recognizers) {
