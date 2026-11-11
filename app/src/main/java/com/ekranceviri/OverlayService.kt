@@ -851,7 +851,7 @@ class OverlayService : Service() {
             val out = Gemini.translate(key, model, payload)
             handler.post {
                 if (out == null || out.size != payload.size) {
-                    fallbackOffline("Gemini hatası: ${Gemini.lastError}", bmp, items, result, missing, src, auto)
+                    fail("Gemini çeviremedi: ${Gemini.lastError}", auto)
                 } else {
                     for (n in missing.indices) {
                         val t = out[n]
