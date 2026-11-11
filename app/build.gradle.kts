@@ -9,6 +9,7 @@ android {
         applicationId = "com.ekranceviri"
         minSdk = 26
         targetSdk = 34
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 4
         versionName = "1.3"
     }
@@ -27,4 +28,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.2")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.android.gms:play-services-mlkit-language-id:17.0.0")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
