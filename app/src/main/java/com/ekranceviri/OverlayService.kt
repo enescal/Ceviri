@@ -611,13 +611,18 @@ class OverlayService : Service() {
             return
         }
         val all = ArrayList<Item>()
+        val lock = Any()
         var left = regs.size
         for (r in regs) {
             val crop = Bitmap.createBitmap(bmp, r.left, r.top, r.width(), r.height())
             ocr(crop, r.left, r.top) { items ->
-                all.addAll(items)
-                left--
-                if (left == 0) afterOcr(bmp, all, auto)
+                val complete: List<Item>?
+                synchronized(lock) {
+                    all.addAll(items)
+                    left--
+                    complete = if (left == 0) ArrayList(all) else null
+                }
+                if (complete != null) afterOcr(bmp, complete, auto)
             }
         }
     }
