@@ -261,7 +261,7 @@ object Gemini {
                 )
                 val generation = JSONObject()
                     .put("responseMimeType", "application/json")
-                    .put("maxOutputTokens", 8192)
+                    .put("maxOutputTokens", 2048)
                     .put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
                 body.put("generationConfig", generation)
 
