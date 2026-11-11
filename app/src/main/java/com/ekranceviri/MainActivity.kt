@@ -394,7 +394,7 @@ class MainActivity : Activity() {
                 val msg = if (out == null) {
                     "HATA: ${Gemini.lastError}\n\nModel: $model"
                 } else {
-                    "Çalışıyor ($ms ms)\n\n${out[0]}"
+                    "Çalışıyor ($ms ms)\nİstenen: $model\nGoogle yanıtı: ${Gemini.lastModelVersion}\n\n${out[0]}"
                 }
                 AlertDialog.Builder(this)
                     .setTitle("Gemini testi")
