@@ -26,7 +26,7 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putString("geminiKey", v.trim()).apply() }
 
     var geminiModel: String
-        get() = sp.getString("geminiModel", "gemini-flash-latest") ?: "gemini-flash-latest"
+        get() = sp.getString("geminiModel", "gemini-3.8-flash") ?: "gemini-3.8-flash"
         set(v) { sp.edit().putString("geminiModel", v.trim()).apply() }
 
     var theme: Int
@@ -201,95 +201,155 @@ object DeepL {
 }
 
 object Gemini {
-    var lastError = ""
+    @Volatile var lastError = ""
 
     private const val SYSTEM =
-        "You translate text captured from a phone screen into natural, fluent Turkish. " +
+        "Translate every item from its original language into natural, fluent Turkish. " +
             "The user message is a JSON array of strings. Return ONLY a JSON array of strings " +
-            "with exactly the same length and order, each item being the Turkish translation of " +
-            "the item at the same position. Keep proper nouns, character names, item names, " +
+            "with exactly the same length and order. Keep proper nouns, character names, item names, " +
             "game terms, brand names, numbers and symbols unchanged. " +
             "If an item is already Turkish or is only a symbol or number, return it unchanged."
 
     fun translate(key: String, model: String, texts: List<String>): List<String>? {
+        if (key.isBlank()) {
+            lastError = "Gemini API anahtarı boş"
+            return null
+        }
+        val safeModel = model.trim().ifBlank { "gemini-3.8-flash" }
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 30, texts.size))
-            val r = post(key, model, chunk, true) ?: return null
+            val chunk = texts.subList(i, minOf(i + 8, texts.size))
+            val r = post(key.trim(), safeModel, chunk) ?: return null
+            if (r.size != chunk.size) {
+                lastError = "Gemini eksik çeviri döndürdü"
+                return null
+            }
             out.addAll(r)
-            i += 30
+            i += chunk.size
         }
         return out
     }
 
-    private fun post(key: String, model: String, chunk: List<String>, thinkOff: Boolean): List<String>? {
-        return try {
-            val input = JSONArray()
-            for (t in chunk) input.put(t)
-            val body = JSONObject()
-            body.put(
-                "systemInstruction",
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM)))
-            )
-            body.put(
-                "contents",
-                JSONArray().put(
-                    JSONObject().put(
-                        "parts", JSONArray().put(JSONObject().put("text", input.toString()))
+    private fun post(key: String, model: String, chunk: List<String>): List<String>? {
+        for (attempt in 0..2) {
+            var connection: HttpURLConnection? = null
+            try {
+                val input = JSONArray()
+                for (t in chunk) input.put(t)
+                val body = JSONObject()
+                body.put(
+                    "systemInstruction",
+                    JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM)))
+                )
+                body.put(
+                    "contents",
+                    JSONArray().put(
+                        JSONObject().put(
+                            "parts", JSONArray().put(JSONObject().put("text", input.toString()))
+                        )
                     )
                 )
-            )
-            val gc = JSONObject()
-                .put("temperature", 0.2)
-                .put("responseMimeType", "application/json")
-            if (thinkOff) gc.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
-            body.put("generationConfig", gc)
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-                URLEncoder.encode(model, "UTF-8") + ":generateContent"
-            val c = URL(url).openConnection() as HttpURLConnection
-            c.requestMethod = "POST"
-            c.connectTimeout = 8000
-            c.readTimeout = 30000
-            c.doOutput = true
-            c.setRequestProperty("x-goog-api-key", key)
-            c.setRequestProperty("Content-Type", "application/json")
-            c.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            val code = c.responseCode
-            if (code != 200) {
-                val err = try {
-                    c.errorStream?.bufferedReader()?.readText() ?: ""
-                } catch (e: Exception) {
-                    ""
+                val generation = JSONObject()
+                    .put("responseMimeType", "application/json")
+                    .put("maxOutputTokens", 4096)
+                    .put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
+                body.put("generationConfig", generation)
+
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+                    URLEncoder.encode(model, "UTF-8") + ":generateContent"
+                connection = URL(url).openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 20000
+                connection.readTimeout = 60000
+                connection.doOutput = true
+                connection.setRequestProperty("x-goog-api-key", key)
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.setRequestProperty("Accept", "application/json")
+                connection.outputStream.use {
+                    it.write(body.toString().toByteArray(Charsets.UTF_8))
                 }
-                if (code == 400 && thinkOff) return post(key, model, chunk, false)
-                val msg = try {
-                    JSONObject(err).getJSONObject("error").optString("message")
-                } catch (e: Exception) {
-                    ""
+
+                val code = connection.responseCode
+                if (code != 200) {
+                    val err = try {
+                        connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    } catch (_: Exception) { "" }
+                    val detail = try {
+                        JSONObject(err).getJSONObject("error").optString("message")
+                    } catch (_: Exception) { err.take(160) }
+                    lastError = "Gemini HTTP $code: " + detail.take(180)
+                    if (code in listOf(429, 500, 502, 503, 504) && attempt < 2) {
+                        Thread.sleep(700L * (attempt + 1))
+                        continue
+                    }
+                    return null
                 }
-                lastError = "kod $code: " + msg.take(160)
+
+                val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(responseText)
+                val candidates = root.optJSONArray("candidates")
+                if (candidates == null || candidates.length() == 0) {
+                    lastError = "Gemini boş yanıt verdi: " +
+                        root.optJSONObject("promptFeedback")?.optString("blockReason", "aday yok")
+                    return null
+                }
+                val candidate = candidates.getJSONObject(0)
+                val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
+                if (parts == null) {
+                    lastError = "Gemini metin yanıtı döndürmedi (" +
+                        candidate.optString("finishReason", "bilinmeyen neden") + ")"
+                    return null
+                }
+                val reply = StringBuilder()
+                for (index in 0 until parts.length()) {
+                    val part = parts.optJSONObject(index) ?: continue
+                    if (!part.optBoolean("thought", false)) {
+                        reply.append(part.optString("text"))
+                    }
+                }
+                val raw = reply.toString().trim()
+                val first = raw.indexOf('[')
+                val last = raw.lastIndexOf(']')
+                if (first < 0 || last < first) {
+                    lastError = "Gemini geçerli JSON listesi döndürmedi"
+                    return null
+                }
+                val arr = JSONArray(raw.substring(first, last + 1))
+                if (arr.length() != chunk.size) {
+                    lastError = "Gemini eksik sayıda öğe döndürdü"
+                    return null
+                }
+                val result = ArrayList<String>()
+                for (index in 0 until arr.length()) {
+                    val value = arr.opt(index)
+                    if (value !is String) {
+                        lastError = "Gemini yanıtında metin olmayan öğe var"
+                        return null
+                    }
+                    result.add(value)
+                }
+                lastError = ""
+                return result
+            } catch (e: Exception) {
+                lastError = when {
+                    e.message?.contains("timeout", true) == true ->
+                        "bağlantı zaman aşımı; internet veya Google API yanıt vermedi"
+                    else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
+                }
+                if (attempt < 2 && (e.message?.contains("timeout", true) == true ||
+                    e is java.io.IOException)) {
+                    try { Thread.sleep(700L * (attempt + 1)) } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return null
+                    }
+                    continue
+                }
                 return null
+            } finally {
+                connection?.disconnect()
             }
-            val txt = c.inputStream.bufferedReader().readText()
-            var reply = JSONObject(txt)
-                .getJSONArray("candidates").getJSONObject(0)
-                .getJSONObject("content").getJSONArray("parts")
-                .getJSONObject(0).getString("text").trim()
-            if (reply.startsWith("```")) {
-                reply = reply.substringAfter("\n").substringBeforeLast("```").trim()
-            }
-            val arr = JSONArray(reply)
-            if (arr.length() != chunk.size) {
-                lastError = "eksik yanıt geldi"
-                return null
-            }
-            val res = ArrayList<String>()
-            for (k in 0 until arr.length()) res.add(arr.getString(k))
-            res
-        } catch (e: Exception) {
-            lastError = "bağlantı/yanıt hatası: " + (e.message ?: "").take(80)
-            null
         }
+        return null
     }
 }
