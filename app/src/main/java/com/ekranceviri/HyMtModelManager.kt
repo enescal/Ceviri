@@ -30,7 +30,9 @@ class HyMtModelManager(context: Context) {
     fun isInstalled(): Boolean {
         val model = File(modelDir, "model_int8_final.onnx")
         val tokenizer = File(modelDir, "tokenizer.json")
-        return model.isFile && model.length() > 100_000_000L &&
+        val hasWeights = model.isFile && model.length() > 100_000_000L ||
+            (modelDir.listFiles()?.any { it.isFile && it != tokenizer && it != model && it.length() > 100_000_000L } == true)
+        return model.isFile && model.length() > 1_000_000L && hasWeights &&
             tokenizer.isFile && tokenizer.length() > 100_000L
     }
 
@@ -100,37 +102,43 @@ class HyMtModelManager(context: Context) {
     private fun extractRequiredFiles(archive: File, listener: Listener) {
         var modelDone = false
         var tokenizerDone = false
+        var externalFiles = 0
         ZipInputStream(BufferedInputStream(FileInputStream(archive), 1024 * 1024)).use { zip ->
             var entry = zip.nextEntry
             val buffer = ByteArray(1024 * 1024)
             while (entry != null) {
                 if (!entry.isDirectory) {
-                    val name = entry.name.substringAfterLast('/')
-                    val target = when (name) {
-                        "model_int8_final.onnx" -> File(modelDir, "$name.part")
-                        "tokenizer.json" -> File(modelDir, "$name.part")
-                        else -> null
+                    // ONNX quantization stores large tensors in external-data sidecar files.
+                    // Extract every verified archive file, not only the graph and tokenizer.
+                    val name = entry.name.substringAfterLast("/")
+                    require(name.isNotBlank() && name != "." && name != "..") { "Model arşivinde geçersiz dosya adı" }
+                    val isModel = name == "model_int8_final.onnx"
+                    val isTokenizer = name == "tokenizer.json"
+                    val target = File(modelDir, if (isModel || isTokenizer) "$name.part" else name)
+                    require(target.canonicalPath.startsWith(modelDir.canonicalPath + File.separator)) {
+                        "Model arşivinde güvenli olmayan dosya yolu"
                     }
-                    if (target != null) {
-                        var written = 0L
-                        FileOutputStream(target).use { raw ->
-                            BufferedOutputStream(raw, 1024 * 1024).use { output ->
-                                var read: Int
-                                while (zip.read(buffer).also { read = it } != -1) {
-                                    output.write(buffer, 0, read)
-                                    written += read
-                                }
-                                output.flush()
-                                raw.fd.sync()
+                    target.parentFile?.mkdirs()
+                    var written = 0L
+                    FileOutputStream(target).use { raw ->
+                        BufferedOutputStream(raw, 1024 * 1024).use { output ->
+                            var read: Int
+                            while (zip.read(buffer).also { read = it } != -1) {
+                                output.write(buffer, 0, read)
+                                written += read
                             }
+                            output.flush()
+                            raw.fd.sync()
                         }
-                        if (name == "model_int8_final.onnx" && written > 100_000_000L) {
-                            modelDone = target.renameTo(File(modelDir, name))
-                        } else if (name == "tokenizer.json" && written > 100_000L) {
-                            tokenizerDone = target.renameTo(File(modelDir, name))
-                        } else {
-                            target.delete()
-                        }
+                    }
+                    if (isModel && written > 1_000_000L) {
+                        modelDone = target.renameTo(File(modelDir, name))
+                    } else if (isTokenizer && written > 100_000L) {
+                        tokenizerDone = target.renameTo(File(modelDir, name))
+                    } else if (isModel || isTokenizer) {
+                        target.delete()
+                    } else if (written > 0L) {
+                        externalFiles++
                     }
                 }
                 zip.closeEntry()
@@ -140,8 +148,10 @@ class HyMtModelManager(context: Context) {
         if (!modelDone || !tokenizerDone) {
             throw IllegalStateException("HY-MT arşivinde gerekli ONNX/tokenizer dosyaları bulunamadı")
         }
+        if (externalFiles == 0 && File(modelDir, "model_int8_final.onnx").length() <= 100_000_000L) {
+            throw IllegalStateException("HY-MT ONNX ağırlık dosyaları eksik")
+        }
     }
-
     companion object {
         const val ARCHIVE_SIZE = 1_926_506_894L
         const val ARCHIVE_URL = "https://github.com/niedev/OnnxModelsEnhancer/releases/download/v1.0.0-beta/HY-MT.zip"
