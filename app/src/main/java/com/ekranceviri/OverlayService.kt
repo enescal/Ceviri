@@ -259,7 +259,9 @@ class OverlayService : Service() {
             width + rowPadding / plane.pixelStride, height, Bitmap.Config.ARGB_8888
         )
         full.copyPixelsFromBuffer(plane.buffer)
-        return Bitmap.createBitmap(full, 0, 0, width, height)
+        val cropped = Bitmap.createBitmap(full, 0, 0, width, height)
+        if (cropped !== full) full.recycle()
+        return cropped
     }
 
     private fun nudgeWindow() {
@@ -416,6 +418,7 @@ class OverlayService : Service() {
         val small = Bitmap.createScaledBitmap(bmp, gw, gh, true)
         val px = IntArray(gw * gh)
         small.getPixels(px, 0, gw, 0, 0, gw, gh)
+        if (small !== bmp) small.recycle()
         for (i in px.indices) {
             val c = px[i]
             px[i] = (Color.red(c) * 30 + Color.green(c) * 59 + Color.blue(c) * 11) / 100
@@ -561,6 +564,7 @@ class OverlayService : Service() {
         val small = Bitmap.createScaledBitmap(bmp, sw, sh, true)
         val px = IntArray(sw * sh)
         small.getPixels(px, 0, sw, 0, 0, sw, sh)
+        if (small !== bmp) small.recycle()
         val out = ArrayList<Int>()
         for (r in regions) {
             val x0 = r.left / k
@@ -711,7 +715,7 @@ class OverlayService : Service() {
         val missing = ArrayList<Int>()
         val eng = prefs.engine
         for (i in items.indices) {
-            val c = cache["$eng|${items[i].text}"]
+            val c = cache["$eng|$src|${items[i].text}"]
             if (c != null) {
                 result[i] = c
             } else {
@@ -750,7 +754,7 @@ class OverlayService : Service() {
                     translator.translate(items[i].text).addOnCompleteListener { t ->
                         if (t.isSuccessful) {
                             result[i] = t.result
-                            cache["offline|${items[i].text}"] = t.result
+                            cache["offline|$src|${items[i].text}"] = t.result
                         } else {
                             result[i] = items[i].text
                         }
@@ -799,7 +803,7 @@ class OverlayService : Service() {
                     for (n in missing.indices) {
                         val t = Names.clean(out[n])
                         result[missing[n]] = t
-                        cache["deepl|${items[missing[n]].text}"] = t
+                        cache["deepl|$src|${items[missing[n]].text}"] = t
                     }
                     show(bmp, items, result, auto)
                 }
@@ -828,7 +832,7 @@ class OverlayService : Service() {
                     for (n in missing.indices) {
                         val t = out[n]
                         result[missing[n]] = t
-                        cache["gemini|${items[missing[n]].text}"] = t
+                        cache["gemini|$src|${items[missing[n]].text}"] = t
                     }
                     show(bmp, items, result, auto)
                 }
