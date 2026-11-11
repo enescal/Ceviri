@@ -34,7 +34,7 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 
 - **İnternetsiz:** ML Kit çeviri dil paketini ilk kullanımda indirir; sonraki çeviriler cihazda yapılır. OCR modelleri de ilk kullanımda Google Play Hizmetleri üzerinden indirilebilir.
 - **DeepL:** DeepL API anahtarı gerekir.
-- **Gemini:** Google AI Studio API anahtarı gerekir. Model alanı boş bırakılırsa varsayılan model kullanılır.
+- **Gemini:** Google AI Studio API anahtarı gerekir. Varsayılan model `gemini-3.8-flash` kullanılır; model alanı boş bırakılırsa otomatik seçilir. Geçici bağlantı/kota hatalarında uygulama çevrimdışı çeviriye geri döner.
 
 API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese açık depoya veya ekran görüntülerine koyma.
 
