@@ -7,6 +7,5 @@
         <item name="android:windowSplashScreenBackground">#07152F</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_brand_mark</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#07152F</item>
-        <item name="android:postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>
