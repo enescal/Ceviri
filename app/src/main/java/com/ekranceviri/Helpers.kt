@@ -289,7 +289,15 @@ object Gemini {
             for (k in 0 until arr.length()) res.add(arr.getString(k))
             res
         } catch (e: Exception) {
-            lastError = "bağlantı/yanıt hatası: " + (e.message ?: "").take(80)
+            lastError = when (e) {
+                is java.net.SocketTimeoutException ->
+                    "Google sunucusu 60 saniyede yanıt vermedi; internet/VPN bağlantısını kontrol et"
+                is java.net.UnknownHostException ->
+                    "Google API adresine ulaşılamadı; DNS veya internet bağlantısını kontrol et"
+                is javax.net.ssl.SSLException ->
+                    "Google ile güvenli bağlantı kurulamadı"
+                else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
+            }
             null
         }
     }
