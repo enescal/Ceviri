@@ -28,6 +28,13 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.2")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.android.gms:play-services-mlkit-language-id:17.0.0")
+
+    // HY-MT 1.5 local inference foundation: ONNX Runtime + Hugging Face tokenizer.
+    // Model weights are downloaded on demand, not bundled into the APK.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+    implementation("ai.djl.android:core:0.33.0")
+    implementation("ai.djl.huggingface:tokenizers:0.33.0")
+    implementation("ai.djl.android:tokenizer-native:0.33.0")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
