@@ -216,14 +216,14 @@ object Gemini {
         var i = 0
         while (i < texts.size) {
             val chunk = texts.subList(i, minOf(i + 8, texts.size))
-            val r = post(key, model, chunk, true) ?: return null
+            val r = post(key, model, chunk) ?: return null
             out.addAll(r)
             i += 30
         }
         return out
     }
 
-    private fun post(key: String, model: String, chunk: List<String>, thinkOff: Boolean): List<String>? {
+    private fun post(key: String, model: String, chunk: List<String>): List<String>? {
         return try {
             val input = JSONArray()
             for (t in chunk) input.put(t)
@@ -262,7 +262,6 @@ object Gemini {
                 } catch (e: Exception) {
                     ""
                 }
-                if (code == 400 && thinkOff) return post(key, model, chunk, false)
                 val msg = try {
                     JSONObject(err).getJSONObject("error").optString("message")
                 } catch (e: Exception) {
@@ -272,10 +271,12 @@ object Gemini {
                 return null
             }
             val txt = c.inputStream.bufferedReader().readText()
-            var reply = JSONObject(txt)
+            val parts = JSONObject(txt)
                 .getJSONArray("candidates").getJSONObject(0)
                 .getJSONObject("content").getJSONArray("parts")
-                .getJSONObject(0).getString("text").trim()
+            val reply = (0 until parts.length())
+                .mapNotNull { parts.optJSONObject(it)?.optString("text") }
+                .joinToString("\n").trim()
             if (reply.startsWith("```")) {
                 reply = reply.substringAfter("\n").substringBeforeLast("```").trim()
             }
