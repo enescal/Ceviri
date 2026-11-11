@@ -628,16 +628,20 @@ class OverlayService : Service() {
         for (candidate in items.sortedByDescending { it.text.length }) {
             val candidateArea = max(1, candidate.rect.width() * candidate.rect.height())
             val duplicate = merged.indexOfFirst { current ->
-                val intersection = Rect(current.rect)
-                if (!intersection.intersect(candidate.rect)) {
+                if (norm(current.text) != norm(candidate.text)) {
                     false
                 } else {
-                    val area = intersection.width() * intersection.height()
-                    val smallerArea = min(
-                        candidateArea,
-                        max(1, current.rect.width() * current.rect.height())
-                    )
-                    area.toFloat() / smallerArea.toFloat() > 0.55f
+                    val intersection = Rect(current.rect)
+                    if (!intersection.intersect(candidate.rect)) {
+                        false
+                    } else {
+                        val area = intersection.width() * intersection.height()
+                        val smallerArea = min(
+                            candidateArea,
+                            max(1, current.rect.width() * current.rect.height())
+                        )
+                        area.toFloat() / smallerArea.toFloat() > 0.55f
+                    }
                 }
             }
             if (duplicate < 0) merged.add(candidate)

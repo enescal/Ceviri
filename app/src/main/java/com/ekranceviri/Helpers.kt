@@ -26,7 +26,7 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putString("geminiKey", v.trim()).apply() }
 
     var geminiModel: String
-        get() = sp.getString("geminiModel", "gemini-flash-latest") ?: "gemini-flash-latest"
+        get() = sp.getString("geminiModel", "gemini-3.8-flash") ?: "gemini-3.8-flash"
         set(v) { sp.edit().putString("geminiModel", v.trim()).apply() }
 
     var theme: Int
@@ -215,15 +215,15 @@ object Gemini {
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 30, texts.size))
-            val r = post(key, model, chunk, true) ?: return null
+            val chunk = texts.subList(i, minOf(i + 8, texts.size))
+            val r = post(key, model, chunk) ?: return null
             out.addAll(r)
-            i += 30
+            i += 8
         }
         return out
     }
 
-    private fun post(key: String, model: String, chunk: List<String>, thinkOff: Boolean): List<String>? {
+    private fun post(key: String, model: String, chunk: List<String>): List<String>? {
         return try {
             val input = JSONArray()
             for (t in chunk) input.put(t)
@@ -243,14 +243,14 @@ object Gemini {
             val gc = JSONObject()
                 .put("temperature", 0.2)
                 .put("responseMimeType", "application/json")
-            if (thinkOff) gc.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+            gc.put("maxOutputTokens", 2048)
             body.put("generationConfig", gc)
             val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
                 URLEncoder.encode(model, "UTF-8") + ":generateContent"
             val c = URL(url).openConnection() as HttpURLConnection
             c.requestMethod = "POST"
-            c.connectTimeout = 8000
-            c.readTimeout = 30000
+            c.connectTimeout = 15000
+            c.readTimeout = 60000
             c.doOutput = true
             c.setRequestProperty("x-goog-api-key", key)
             c.setRequestProperty("Content-Type", "application/json")
@@ -262,7 +262,6 @@ object Gemini {
                 } catch (e: Exception) {
                     ""
                 }
-                if (code == 400 && thinkOff) return post(key, model, chunk, false)
                 val msg = try {
                     JSONObject(err).getJSONObject("error").optString("message")
                 } catch (e: Exception) {
@@ -272,10 +271,12 @@ object Gemini {
                 return null
             }
             val txt = c.inputStream.bufferedReader().readText()
-            var reply = JSONObject(txt)
+            val parts = JSONObject(txt)
                 .getJSONArray("candidates").getJSONObject(0)
                 .getJSONObject("content").getJSONArray("parts")
-                .getJSONObject(0).getString("text").trim()
+            val reply = (0 until parts.length())
+                .mapNotNull { parts.optJSONObject(it)?.optString("text") }
+                .joinToString("\n").trim()
             if (reply.startsWith("```")) {
                 reply = reply.substringAfter("\n").substringBeforeLast("```").trim()
             }
@@ -288,7 +289,15 @@ object Gemini {
             for (k in 0 until arr.length()) res.add(arr.getString(k))
             res
         } catch (e: Exception) {
-            lastError = "bağlantı/yanıt hatası: " + (e.message ?: "").take(80)
+            lastError = when (e) {
+                is java.net.SocketTimeoutException ->
+                    "Google sunucusu 60 saniyede yanıt vermedi; internet/VPN bağlantısını kontrol et"
+                is java.net.UnknownHostException ->
+                    "Google API adresine ulaşılamadı; DNS veya internet bağlantısını kontrol et"
+                is javax.net.ssl.SSLException ->
+                    "Google ile güvenli bağlantı kurulamadı"
+                else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
+            }
             null
         }
     }

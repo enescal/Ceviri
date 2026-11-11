@@ -52,3 +52,10 @@ API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese aç�
 - OCR modellerinin ilk kurulumu için Google Play Hizmetleri ve internet bağlantısı gerekir. Modeller indirildikten sonra OCR cihaz üzerinde çalışır.
 - OCR ve çeviri kalitesi metnin yazı tipine, çözünürlüğüne ve seçilen motora göre değişir.
 - Otomatik mod, ekran hareketi bittikten sonra çeviri yapar; sürekli kayan içerikte beklemek gerekir.
+
+
+## v1.3 düzeltmeleri
+- Gemini varsayılan modeli güncel kararlı Flash sürümüne alındı.
+- İstekler küçültüldü, sunucu yanıt süresi artırıldı ve ağ hataları daha anlaşılır gösterilir.
+- OCR motorları yalnızca aynı metni aynı bölgede bulduklarında sonuçları birleştirir.
+- Uygulama simgesine ve ayarlar ekranına sağlanan logo görseli eklendi.
