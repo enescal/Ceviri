@@ -196,9 +196,21 @@ class MainActivity : Activity() {
         )
         setContentView(frame)
 
+        val header = LinearLayout(this)
+        header.orientation = LinearLayout.HORIZONTAL
+        header.gravity = android.view.Gravity.CENTER_VERTICAL
+        val brand = ImageView(this)
+        brand.setImageResource(R.drawable.ic_brand_mark)
+        brand.scaleType = ImageView.ScaleType.FIT_CENTER
+        header.addView(brand, LinearLayout.LayoutParams(dp(64), dp(64)))
         val title = label("Ekran Çeviri", 28f, true)
-        title.setPadding(dp(4), 0, 0, dp(12))
-        root.addView(title)
+        title.setPadding(dp(12), 0, 0, dp(8))
+        header.addView(title)
+        val headerLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        headerLp.bottomMargin = dp(12)
+        root.addView(header, headerLp)
 
         // Çeviri motoru
         val c1 = card(root, "Çeviri motoru")
