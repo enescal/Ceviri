@@ -369,11 +369,13 @@ class OverlayService : Service() {
 
     private fun monitor(bmp: Bitmap?) {
         if (!autoOn || bmp == null) {
+            bmp?.let { if (!it.isRecycled) it.recycle() }
             done()
             return
         }
         val regs = regions()
         if (regs.isEmpty()) {
+            if (!bmp.isRecycled) bmp.recycle()
             toast("Önce alan çiz: Ç butonuna uzun bas")
             autoOn = false
             resetAutoState()
@@ -385,8 +387,10 @@ class OverlayService : Service() {
 
         if (overlay != null) {
             trackOverlay(bmp)
+            if (!bmp.isRecycled) bmp.recycle()
             return
         }
+        if (!bmp.isRecycled) bmp.recycle()
 
         val prev = prevFp
         prevFp = fp
@@ -540,6 +544,7 @@ class OverlayService : Service() {
         capture(true) { clean ->
             restoreViews()
             if (clean == null || !autoOn) {
+                clean?.let { if (!it.isRecycled) it.recycle() }
                 done()
             } else {
                 handledFp = fingerprint(clean, regions())
