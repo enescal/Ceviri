@@ -123,6 +123,7 @@ class OverlayService : Service() {
     private var capGen = 0
     private var nudge = false
     private var busy = false
+    private var processingBitmap: Bitmap? = null
     private var autoOn = false
 
     // Otomatik mod durumu
@@ -306,6 +307,8 @@ class OverlayService : Service() {
     }
 
     private fun done() {
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = null
         busy = false
         restoreViews()
         handler.removeCallbacks(autoRunnable)
@@ -591,6 +594,8 @@ class OverlayService : Service() {
     }
 
     private fun process(bmp: Bitmap, auto: Boolean) {
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = bmp
         val regs = regions()
         if (regs.isEmpty()) {
             toast("Önce alan çiz: Ç butonuna uzun bas")
