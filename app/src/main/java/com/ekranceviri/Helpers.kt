@@ -224,7 +224,7 @@ object Gemini {
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 8, texts.size))
+            val chunk = texts.subList(i, minOf(i + 20, texts.size))
             val r = post(key.trim(), safeModel, chunk) ?: return null
             if (r.size != chunk.size) {
                 lastError = "Gemini eksik çeviri döndürdü"
@@ -257,7 +257,7 @@ object Gemini {
                 )
                 val generation = JSONObject()
                     .put("responseMimeType", "application/json")
-                    .put("maxOutputTokens", 4096)
+                    .put("maxOutputTokens", 8192)
                     .put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
                 body.put("generationConfig", generation)
 
@@ -265,8 +265,8 @@ object Gemini {
                     URLEncoder.encode(model, "UTF-8") + ":generateContent"
                 connection = URL(url).openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
-                connection.connectTimeout = 15000
-                connection.readTimeout = 40000
+                connection.connectTimeout = 10000
+                connection.readTimeout = 25000
                 connection.doOutput = true
                 connection.setRequestProperty("x-goog-api-key", key)
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -342,8 +342,8 @@ object Gemini {
                         "bağlantı zaman aşımı; internet veya Google API yanıt vermedi"
                     else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
                 }
-                if (attempt < 1 && (e.message?.contains("timeout", true) == true ||
-                    e is java.io.IOException)) {
+                if (attempt < 1 && e is java.io.IOException &&
+                    e.message?.contains("timeout", true) != true) {
                     try { Thread.sleep(700L * (attempt + 1)) } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
                         return null
