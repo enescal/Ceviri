@@ -235,6 +235,45 @@ class MainActivity : Activity() {
         btnTest.setOnClickListener { testGemini() }
         c1.addView(btnTest)
 
+        // Güçlü çevrimdışı HY-MT modeli (ilk indirme yaklaşık 1,9 GB).
+        val hyManager = HyMtModelManager(this)
+        val hyStatus = label(
+            if (hyManager.isInstalled()) "HY-MT modeli hazır" else "HY-MT modeli henüz indirilmedi (yaklaşık 1,9 GB)",
+            13f, false
+        )
+        c1.addView(hyStatus)
+        val btnHy = button(
+            if (hyManager.isInstalled()) "HY-MT modeli indirildi" else "Güçlü çevrimdışı modeli indir",
+            false
+        )
+        btnHy.isEnabled = !hyManager.isInstalled()
+        btnHy.setOnClickListener {
+            btnHy.isEnabled = false
+            btnHy.text = "İndirme hazırlanıyor…"
+            hyManager.download(object : HyMtModelManager.Listener {
+                override fun onProgress(progress: HyMtModelManager.Progress) {
+                    runOnUiThread {
+                        val percent = if (progress.total > 0) {
+                            (progress.downloaded * 100 / progress.total).toInt().coerceIn(0, 100)
+                        } else 0
+                        hyStatus.text = if (progress.total > 0 && progress.message.contains("indir")) {
+                            "HY-MT indiriliyor: %$percent"
+                        } else progress.message
+                        btnHy.text = progress.message
+                    }
+                }
+                override fun onComplete(success: Boolean, message: String) {
+                    runOnUiThread {
+                        hyStatus.text = message
+                        btnHy.text = if (success) "HY-MT modeli hazır" else "Yeniden dene"
+                        btnHy.isEnabled = !success
+                        Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                    }
+                }
+            })
+        }
+        c1.addView(btnHy)
+
         // Ne çevrilsin
         val c2 = card(root, "Ne çevrilsin?")
         val g2 = RadioGroup(this)
