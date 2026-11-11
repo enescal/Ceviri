@@ -378,6 +378,7 @@ class OverlayService : Service() {
             if (!bmp.isRecycled) bmp.recycle()
             toast("Önce alan çiz: Ç butonuna uzun bas")
             autoOn = false
+            prefs.auto = false
             resetAutoState()
             updateButtonLook()
             done()
@@ -1067,6 +1068,7 @@ class OverlayService : Service() {
     private fun toggleAuto() {
         if (editor != null) return
         autoOn = !autoOn
+        prefs.auto = autoOn
         updateButtonLook()
         handler.removeCallbacks(autoRunnable)
         resetAutoState()
