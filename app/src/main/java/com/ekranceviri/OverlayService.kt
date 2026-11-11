@@ -44,7 +44,12 @@ import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -118,6 +123,7 @@ class OverlayService : Service() {
     private var capGen = 0
     private var nudge = false
     private var busy = false
+    private var processingBitmap: Bitmap? = null
     private var autoOn = false
 
     // Otomatik mod durumu
@@ -143,8 +149,15 @@ class OverlayService : Service() {
     private var statusBarH = 0
     private val translators = HashMap<String, Translator>()
     private val cache = HashMap<String, String>()
-    private val recognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    // CeBo benzeri çok dilli OCR: Latin ile birlikte Asya ve Devanagari yazıları.
+    private val recognizers: List<TextRecognizer> by lazy {
+        listOf(
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS),
+            TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()),
+            TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()),
+            TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()),
+            TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
+        )
     }
     private val langId by lazy { LanguageIdentification.getClient() }
     private val dismissRunnable = Runnable { dismissOverlay() }
@@ -247,7 +260,9 @@ class OverlayService : Service() {
             width + rowPadding / plane.pixelStride, height, Bitmap.Config.ARGB_8888
         )
         full.copyPixelsFromBuffer(plane.buffer)
-        return Bitmap.createBitmap(full, 0, 0, width, height)
+        val cropped = Bitmap.createBitmap(full, 0, 0, width, height)
+        if (cropped !== full) full.recycle()
+        return cropped
     }
 
     private fun nudgeWindow() {
@@ -292,6 +307,8 @@ class OverlayService : Service() {
     }
 
     private fun done() {
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = null
         busy = false
         restoreViews()
         handler.removeCallbacks(autoRunnable)
@@ -352,11 +369,13 @@ class OverlayService : Service() {
 
     private fun monitor(bmp: Bitmap?) {
         if (!autoOn || bmp == null) {
+            bmp?.let { if (!it.isRecycled) it.recycle() }
             done()
             return
         }
         val regs = regions()
         if (regs.isEmpty()) {
+            if (!bmp.isRecycled) bmp.recycle()
             toast("Önce alan çiz: Ç butonuna uzun bas")
             autoOn = false
             resetAutoState()
@@ -368,8 +387,10 @@ class OverlayService : Service() {
 
         if (overlay != null) {
             trackOverlay(bmp)
+            if (!bmp.isRecycled) bmp.recycle()
             return
         }
+        if (!bmp.isRecycled) bmp.recycle()
 
         val prev = prevFp
         prevFp = fp
@@ -404,6 +425,7 @@ class OverlayService : Service() {
         val small = Bitmap.createScaledBitmap(bmp, gw, gh, true)
         val px = IntArray(gw * gh)
         small.getPixels(px, 0, gw, 0, 0, gw, gh)
+        if (small !== bmp) small.recycle()
         for (i in px.indices) {
             val c = px[i]
             px[i] = (Color.red(c) * 30 + Color.green(c) * 59 + Color.blue(c) * 11) / 100
@@ -522,6 +544,7 @@ class OverlayService : Service() {
         capture(true) { clean ->
             restoreViews()
             if (clean == null || !autoOn) {
+                clean?.let { if (!it.isRecycled) it.recycle() }
                 done()
             } else {
                 handledFp = fingerprint(clean, regions())
@@ -549,6 +572,7 @@ class OverlayService : Service() {
         val small = Bitmap.createScaledBitmap(bmp, sw, sh, true)
         val px = IntArray(sw * sh)
         small.getPixels(px, 0, sw, 0, 0, sw, sh)
+        if (small !== bmp) small.recycle()
         val out = ArrayList<Int>()
         for (r in regions) {
             val x0 = r.left / k
@@ -575,6 +599,8 @@ class OverlayService : Service() {
     }
 
     private fun process(bmp: Bitmap, auto: Boolean) {
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = bmp
         val regs = regions()
         if (regs.isEmpty()) {
             toast("Önce alan çiz: Ç butonuna uzun bas")
@@ -596,24 +622,76 @@ class OverlayService : Service() {
         }
     }
 
-    private fun ocr(bmp: Bitmap, ox: Int, oy: Int, cb: (List<Item>) -> Unit) {
-        recognizer.process(InputImage.fromBitmap(bmp, 0))
-            .addOnSuccessListener { res ->
-                val list = ArrayList<Item>()
-                for (b in res.textBlocks) {
-                    val r = b.boundingBox ?: continue
-                    val t = b.text.replace("\n", " ").trim()
-                    if (t.length < 2) continue
-                    list.add(
-                        Item(
-                            Rect(r.left + ox, r.top + oy, r.right + ox, r.bottom + oy),
-                            t, max(1, b.lines.size)
-                        )
+    private fun mergeOcrItems(items: List<Item>): List<Item> {
+        val merged = ArrayList<Item>()
+        // Aynı metni birden fazla OCR motoru bulursa kutuları tekilleştir.
+        for (candidate in items.sortedByDescending { it.text.length }) {
+            val candidateArea = max(1, candidate.rect.width() * candidate.rect.height())
+            val duplicate = merged.indexOfFirst { current ->
+                val intersection = Rect(current.rect)
+                if (!intersection.intersect(candidate.rect)) {
+                    false
+                } else {
+                    val area = intersection.width() * intersection.height()
+                    val smallerArea = min(
+                        candidateArea,
+                        max(1, current.rect.width() * current.rect.height())
                     )
+                    area.toFloat() / smallerArea.toFloat() > 0.55f
                 }
-                cb(list)
             }
-            .addOnFailureListener { cb(emptyList()) }
+            if (duplicate < 0) merged.add(candidate)
+        }
+        return merged.sortedWith(compareBy<Item> { it.rect.top }.thenBy { it.rect.left })
+    }
+
+    private fun ocr(bmp: Bitmap, ox: Int, oy: Int, cb: (List<Item>) -> Unit) {
+        val input = InputImage.fromBitmap(bmp, 0)
+        val collected = ArrayList<Item>()
+        val lock = Any()
+        var pending = recognizers.size
+        var finished = false
+
+        fun complete(items: List<Item>) {
+            val result: List<Item>?
+            synchronized(lock) {
+                collected.addAll(items)
+                pending--
+                result = if (pending == 0 && !finished) {
+                    finished = true
+                    mergeOcrItems(collected)
+                } else null
+            }
+            if (result != null) {
+                if (!bmp.isRecycled) bmp.recycle()
+                cb(result)
+            }
+        }
+
+        for (recognizer in recognizers) {
+            try {
+                recognizer.process(input)
+                    .addOnSuccessListener { res ->
+                        val list = ArrayList<Item>()
+                        for (block in res.textBlocks) {
+                            val rect = block.boundingBox ?: continue
+                            val text = block.text.replace("\n", " ").trim()
+                            if (text.length < 2) continue
+                            list.add(
+                                Item(
+                                    Rect(rect.left + ox, rect.top + oy, rect.right + ox, rect.bottom + oy),
+                                    text,
+                                    max(1, block.lines.size)
+                                )
+                            )
+                        }
+                        complete(list)
+                    }
+                    .addOnFailureListener { complete(emptyList()) }
+            } catch (_: Exception) {
+                complete(emptyList())
+            }
+        }
     }
 
     private fun norm(s: String): String = s.lowercase().replace(Regex("\\s+"), " ").trim()
@@ -629,7 +707,7 @@ class OverlayService : Service() {
         val sample = items.joinToString(" ") { it.text }.take(500)
         langId.identifyLanguage(sample)
             .addOnSuccessListener { tag ->
-                if (tag == "tr") {
+                if (tag == "tr" && prefs.engine == "offline") {
                     if (!auto) toast("Çevrilecek yabancı yazı bulunamadı") else dismissOverlay()
                     done()
                 } else {
@@ -650,7 +728,7 @@ class OverlayService : Service() {
         val missing = ArrayList<Int>()
         val eng = prefs.engine
         for (i in items.indices) {
-            val c = cache["$eng|${items[i].text}"]
+            val c = cache["$eng|$src|${items[i].text}"]
             if (c != null) {
                 result[i] = c
             } else {
@@ -689,7 +767,7 @@ class OverlayService : Service() {
                     translator.translate(items[i].text).addOnCompleteListener { t ->
                         if (t.isSuccessful) {
                             result[i] = t.result
-                            cache["offline|${items[i].text}"] = t.result
+                            cache["offline|$src|${items[i].text}"] = t.result
                         } else {
                             result[i] = items[i].text
                         }
@@ -708,6 +786,10 @@ class OverlayService : Service() {
         msg: String, bmp: Bitmap, items: List<Item>, result: Array<String?>,
         missing: List<Int>, src: String, auto: Boolean
     ) {
+        if (src == TranslateLanguage.TURKISH) {
+            fail("$msg. Türkçe algılandı; yanlış dilden çevirmedim.", auto)
+            return
+        }
         errToast("$msg — internetsiz çeviriye geçildi")
         offlineTranslate(bmp, items, result, missing, src, auto)
     }
@@ -734,7 +816,7 @@ class OverlayService : Service() {
                     for (n in missing.indices) {
                         val t = Names.clean(out[n])
                         result[missing[n]] = t
-                        cache["deepl|${items[missing[n]].text}"] = t
+                        cache["deepl|$src|${items[missing[n]].text}"] = t
                     }
                     show(bmp, items, result, auto)
                 }
@@ -763,7 +845,7 @@ class OverlayService : Service() {
                     for (n in missing.indices) {
                         val t = out[n]
                         result[missing[n]] = t
-                        cache["gemini|${items[missing[n]].text}"] = t
+                        cache["gemini|$src|${items[missing[n]].text}"] = t
                     }
                     show(bmp, items, result, auto)
                 }
@@ -1087,6 +1169,8 @@ class OverlayService : Service() {
     override fun onDestroy() {
         autoOn = false
         handler.removeCallbacksAndMessages(null)
+        processingBitmap?.let { if (!it.isRecycled) it.recycle() }
+        processingBitmap = null
         if (this::wm.isInitialized) {
             dismissOverlay()
             editor?.let {
@@ -1104,7 +1188,7 @@ class OverlayService : Service() {
         }
         translators.values.forEach { it.close() }
         try {
-            recognizer.close()
+            recognizers.forEach { it.close() }
             langId.close()
         } catch (e: Exception) {
         }

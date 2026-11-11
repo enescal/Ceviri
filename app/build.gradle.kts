@@ -9,8 +9,8 @@ android {
         applicationId = "com.ekranceviri"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -19,7 +19,12 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
-    implementation("com.google.mlkit:text-recognition:16.0.1")
+    // OCR modelleri Google Play Hizmetleri'nden indirilir; APK boyutu küçük kalır.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.2")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.2")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-devanagari:16.0.2")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.2")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.2")
     implementation("com.google.mlkit:translate:17.0.3")
-    implementation("com.google.mlkit:language-id:17.0.6")
+    implementation("com.google.android.gms:play-services-mlkit-language-id:17.0.0")
 }
