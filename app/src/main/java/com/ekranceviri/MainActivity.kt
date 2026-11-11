@@ -196,6 +196,14 @@ class MainActivity : Activity() {
         )
         setContentView(frame)
 
+        val brand = ImageView(this)
+        brand.setImageResource(R.drawable.app_logo)
+        brand.scaleType = ImageView.ScaleType.CENTER_CROP
+        val brandLp = LinearLayout.LayoutParams(dp(76), dp(76))
+        brandLp.bottomMargin = dp(10)
+        brand.layoutParams = brandLp
+        root.addView(brand)
+
         val title = label("Ekran Çeviri", 28f, true)
         title.setPadding(dp(4), 0, 0, dp(12))
         root.addView(title)
@@ -214,7 +222,7 @@ class MainActivity : Activity() {
         c1.addView(etDeepl)
         etGemini = edit("Gemini anahtarı (aistudio.google.com)")
         c1.addView(etGemini)
-        etModel = edit("Gemini modeli (varsayılan: gemini-flash-latest)")
+        etModel = edit("Gemini modeli (varsayılan: gemini-3.8-flash)")
         c1.addView(etModel)
         val btnTest = button("Gemini anahtarını test et", false)
         btnTest.setOnClickListener { testGemini() }
@@ -334,7 +342,7 @@ class MainActivity : Activity() {
         prefs.deeplKey = etDeepl.text.toString()
         prefs.geminiKey = etGemini.text.toString()
         val m = etModel.text.toString().trim()
-        prefs.geminiModel = if (m.isEmpty()) "gemini-flash-latest" else m
+        prefs.geminiModel = if (m.isEmpty()) "gemini-3.8-flash" else m
         prefs.auto = swAuto.isChecked
         prefs.mode = if (rbArea.isChecked) "area" else "full"
         prefs.tts = swTts.isChecked
@@ -370,7 +378,7 @@ class MainActivity : Activity() {
             return
         }
         Toast.makeText(this, "Test ediliyor...", Toast.LENGTH_SHORT).show()
-        val model = prefs.geminiModel
+        val model = prefs.geminiModel.ifBlank { "gemini-3.8-flash" }
         Thread {
             val t0 = System.currentTimeMillis()
             val out = Gemini.translate(key, model, listOf("Hello, how are you today?"))
