@@ -274,7 +274,7 @@ object Gemini {
             val parts = JSONObject(txt)
                 .getJSONArray("candidates").getJSONObject(0)
                 .getJSONObject("content").getJSONArray("parts")
-            val reply = (0 until parts.length())
+            var reply = (0 until parts.length())
                 .mapNotNull { parts.optJSONObject(it)?.optString("text") }
                 .joinToString("\n").trim()
             if (reply.startsWith("```")) {
