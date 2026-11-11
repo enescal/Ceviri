@@ -26,7 +26,7 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putString("geminiKey", v.trim()).apply() }
 
     var geminiModel: String
-        get() = sp.getString("geminiModel", "gemini-flash-latest") ?: "gemini-flash-latest"
+        get() = sp.getString("geminiModel", "gemini-3.8-flash") ?: "gemini-flash-latest"
         set(v) { sp.edit().putString("geminiModel", v.trim()).apply() }
 
     var theme: Int
@@ -215,7 +215,7 @@ object Gemini {
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 30, texts.size))
+            val chunk = texts.subList(i, minOf(i + 8, texts.size))
             val r = post(key, model, chunk, true) ?: return null
             out.addAll(r)
             i += 30
@@ -243,14 +243,14 @@ object Gemini {
             val gc = JSONObject()
                 .put("temperature", 0.2)
                 .put("responseMimeType", "application/json")
-            if (thinkOff) gc.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+            gc.put("maxOutputTokens", 2048)
             body.put("generationConfig", gc)
             val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
                 URLEncoder.encode(model, "UTF-8") + ":generateContent"
             val c = URL(url).openConnection() as HttpURLConnection
             c.requestMethod = "POST"
-            c.connectTimeout = 8000
-            c.readTimeout = 30000
+            c.connectTimeout = 15000
+            c.readTimeout = 60000
             c.doOutput = true
             c.setRequestProperty("x-goog-api-key", key)
             c.setRequestProperty("Content-Type", "application/json")
