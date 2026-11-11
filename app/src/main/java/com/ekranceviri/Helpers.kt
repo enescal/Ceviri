@@ -26,7 +26,7 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putString("geminiKey", v.trim()).apply() }
 
     var geminiModel: String
-        get() = sp.getString("geminiModel", "gemini-3.8-flash") ?: "gemini-flash-latest"
+        get() = sp.getString("geminiModel", "gemini-3.8-flash") ?: "gemini-3.8-flash"
         set(v) { sp.edit().putString("geminiModel", v.trim()).apply() }
 
     var theme: Int
