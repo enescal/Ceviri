@@ -218,7 +218,7 @@ object Gemini {
             val chunk = texts.subList(i, minOf(i + 8, texts.size))
             val r = post(key, model, chunk) ?: return null
             out.addAll(r)
-            i += 30
+            i += 8
         }
         return out
     }
