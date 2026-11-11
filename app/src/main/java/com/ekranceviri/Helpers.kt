@@ -226,7 +226,7 @@ object Gemini {
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 20, texts.size))
+            val chunk = texts.subList(i, minOf(i + 5, texts.size))
             val r = post(key.trim(), safeModel, chunk) ?: return null
             if (r.size != chunk.size) {
                 lastError = "Gemini eksik çeviri döndürdü"
@@ -241,6 +241,8 @@ object Gemini {
     private fun post(key: String, model: String, chunk: List<String>): List<String>? {
         for (attempt in 0..1) {
             var connection: HttpURLConnection? = null
+            var stage = "istek hazırlanıyor"
+            val startedAt = System.currentTimeMillis()
             try {
                 val input = JSONArray()
                 for (t in chunk) input.put(t)
@@ -265,18 +267,23 @@ object Gemini {
 
                 val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
                     URLEncoder.encode(model, "UTF-8") + ":generateContent"
+                stage = "Google sunucusuna bağlanılıyor"
                 connection = URL(url).openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 25000
+                connection.connectTimeout = 15000
+                // Gemini 3.x yanıtları yoğun sunucu yükünde 25 saniyeyi aşabiliyor.
+                connection.readTimeout = 60000
+                connection.useCaches = false
                 connection.doOutput = true
                 connection.setRequestProperty("x-goog-api-key", key)
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 connection.setRequestProperty("Accept", "application/json")
+                stage = "istek Google'a gönderiliyor"
                 connection.outputStream.use {
                     it.write(body.toString().toByteArray(Charsets.UTF_8))
                 }
 
+                stage = "Google yanıtı bekleniyor"
                 val code = connection.responseCode
                 if (code != 200) {
                     val err = try {
@@ -293,6 +300,7 @@ object Gemini {
                     return null
                 }
 
+                stage = "Google yanıtı okunuyor"
                 val responseText = connection.inputStream.bufferedReader().use { it.readText() }
                 val root = JSONObject(responseText)
                 lastModelVersion = root.optString("modelVersion", model)
@@ -340,13 +348,14 @@ object Gemini {
                 lastError = ""
                 return result
             } catch (e: Exception) {
+                val elapsed = System.currentTimeMillis() - startedAt
                 lastError = when {
                     e.message?.contains("timeout", true) == true ->
-                        "bağlantı zaman aşımı; internet veya Google API yanıt vermedi"
-                    else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
+                        stage + " aşamasında zaman aşımı (" + elapsed + " ms). Google API'ye erişim veya ağ yanıtı gecikiyor."
+                    else -> stage + " aşamasında hata: " +
+                        (e.message ?: e.javaClass.simpleName).take(100)
                 }
-                if (attempt < 1 && e is java.io.IOException &&
-                    e.message?.contains("timeout", true) != true) {
+                if (attempt < 1 && e is java.io.IOException) {
                     try { Thread.sleep(700L * (attempt + 1)) } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
                         return null
