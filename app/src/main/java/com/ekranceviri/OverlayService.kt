@@ -762,6 +762,32 @@ class OverlayService : Service() {
         bmp: Bitmap, items: List<Item>, result: Array<String?>,
         missing: List<Int>, src: String, auto: Boolean
     ) {
+        if (HyMtEngine.isReady(this)) {
+            if (!auto) toast("HY-MT yapay zekâsı ile çevriliyor…")
+            Thread {
+                try {
+                    for (i in missing) {
+                        val translated = HyMtEngine.translate(this, src, items[i].text)
+                        result[i] = translated
+                        cache["offline|$src|${items[i].text}"] = translated
+                    }
+                    handler.post { show(bmp, items, result, auto) }
+                } catch (e: Exception) {
+                    handler.post {
+                        errToast("HY-MT çalıştırılamadı: ${e.message ?: "bilinmeyen hata"}. ML Kit yedeğine geçiliyor.")
+                        offlineTranslateMlKit(bmp, items, result, missing, src, auto)
+                    }
+                }
+            }.start()
+            return
+        }
+        offlineTranslateMlKit(bmp, items, result, missing, src, auto)
+    }
+
+    private fun offlineTranslateMlKit(
+        bmp: Bitmap, items: List<Item>, result: Array<String?>,
+        missing: List<Int>, src: String, auto: Boolean
+    ) {
         val translator = translators.getOrPut(src) {
             Translation.getClient(
                 TranslatorOptions.Builder()
@@ -791,7 +817,6 @@ class OverlayService : Service() {
                 fail("Dil paketi inemedi, internet var mı?", auto)
             }
     }
-
     // İnternetli motor hata verirse çeviri durmasın, internetsiz motora geç
     private fun fallbackOffline(
         msg: String, bmp: Bitmap, items: List<Item>, result: Array<String?>,
