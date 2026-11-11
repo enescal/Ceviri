@@ -237,7 +237,7 @@ object Gemini {
     }
 
     private fun post(key: String, model: String, chunk: List<String>): List<String>? {
-        for (attempt in 0..2) {
+        for (attempt in 0..1) {
             var connection: HttpURLConnection? = null
             try {
                 val input = JSONArray()
@@ -265,8 +265,8 @@ object Gemini {
                     URLEncoder.encode(model, "UTF-8") + ":generateContent"
                 connection = URL(url).openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
-                connection.connectTimeout = 20000
-                connection.readTimeout = 60000
+                connection.connectTimeout = 15000
+                connection.readTimeout = 40000
                 connection.doOutput = true
                 connection.setRequestProperty("x-goog-api-key", key)
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -284,7 +284,7 @@ object Gemini {
                         JSONObject(err).getJSONObject("error").optString("message")
                     } catch (_: Exception) { err.take(160) }
                     lastError = "Gemini HTTP $code: " + detail.take(180)
-                    if (code in listOf(429, 500, 502, 503, 504) && attempt < 2) {
+                    if (code in listOf(429, 500, 502, 503, 504) && attempt < 1) {
                         Thread.sleep(700L * (attempt + 1))
                         continue
                     }
@@ -342,7 +342,7 @@ object Gemini {
                         "bağlantı zaman aşımı; internet veya Google API yanıt vermedi"
                     else -> "bağlantı/yanıt hatası: " + (e.message ?: e.javaClass.simpleName).take(100)
                 }
-                if (attempt < 2 && (e.message?.contains("timeout", true) == true ||
+                if (attempt < 1 && (e.message?.contains("timeout", true) == true ||
                     e is java.io.IOException)) {
                     try { Thread.sleep(700L * (attempt + 1)) } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
