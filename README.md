@@ -7,7 +7,7 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 - Ekranın tamamını veya seçilen birden fazla alanı çevirme
 - Ekranda duran yeşil **Ç** butonu
 - Tek dokunuşla çeviri, çift dokunuşla otomatik çeviri, uzun dokunuşla alan seçimi
-- Latin, Çince, Devanagari, Japonca ve Korece OCR
+- Latin, Çince, Devanagari, Japonca ve Korece OCR (modeller Google Play Hizmetleri'nden indirilir)
 - Çevrimdışı ML Kit çevirisi
 - İsteğe bağlı DeepL ve Gemini çeviri motorları
 - Otomatik modda sayfa kaydırmasını takip etme
@@ -32,7 +32,7 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 
 ## Çeviri motorları
 
-- **İnternetsiz:** ML Kit dil paketini ilk kullanımda indirir; sonraki çeviriler cihazda yapılır.
+- **İnternetsiz:** ML Kit çeviri dil paketini ilk kullanımda indirir; sonraki çeviriler cihazda yapılır. OCR modelleri de ilk kullanımda Google Play Hizmetleri üzerinden indirilebilir.
 - **DeepL:** DeepL API anahtarı gerekir.
 - **Gemini:** Google AI Studio API anahtarı gerekir. Model alanı boş bırakılırsa varsayılan model kullanılır.
 
@@ -49,5 +49,6 @@ API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese aç�
 
 - Ekran yakalama Android'in kendi izin penceresiyle kullanıcı tarafından başlatılmalıdır.
 - Bazı korumalı uygulamalar ve DRM içerikleri ekran yakalamayı engelleyebilir.
+- OCR modellerinin ilk kurulumu için Google Play Hizmetleri ve internet bağlantısı gerekir. Modeller indirildikten sonra OCR cihaz üzerinde çalışır.
 - OCR ve çeviri kalitesi metnin yazı tipine, çözünürlüğüne ve seçilen motora göre değişir.
 - Otomatik mod, ekran hareketi bittikten sonra çeviri yapar; sürekli kayan içerikte beklemek gerekir.
