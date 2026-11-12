@@ -291,7 +291,7 @@ object Gemini {
             lastError = "Gemini API anahtarı boş"
             return null
         }
-        val safeModel = model.trim().ifBlank { "gemini-3.8-flash" }
+        val safeModel = model.trim().ifBlank { "gemini-3.1-flash-lite" }
         lastModelVersion = ""
         val out = ArrayList<String>()
         var i = 0
