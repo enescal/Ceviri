@@ -658,53 +658,73 @@ class OverlayService : Service() {
 
     private fun ocr(bmp: Bitmap, ox: Int, oy: Int, cb: (List<Item>) -> Unit) {
         val input = InputImage.fromBitmap(bmp, 0)
-        val collected = ArrayList<Item>()
-        val lock = Any()
-        var pending = recognizers.size
+        val primary = recognizers.first()
+        val specialized = recognizers.drop(1)
         var finished = false
 
-        fun complete(items: List<Item>) {
-            val result: List<Item>?
-            synchronized(lock) {
-                collected.addAll(items)
-                pending--
-                result = if (pending == 0 && !finished) {
-                    finished = true
-                    mergeOcrItems(collected)
-                } else null
+        fun parse(result: com.google.mlkit.vision.text.Text) : List<Item> {
+            val list = ArrayList<Item>()
+            for (block in result.textBlocks) {
+                val rect = block.boundingBox ?: continue
+                val text = block.text.replace("\\n", " ").trim()
+                if (text.length < 2) continue
+                list.add(Item(
+                    Rect(rect.left + ox, rect.top + oy, rect.right + ox, rect.bottom + oy),
+                    text,
+                    max(1, block.lines.size)
+                ))
             }
-            if (result != null) {
-                if (!bmp.isRecycled) bmp.recycle()
-                cb(result)
-            }
+            return list
         }
 
-        for (recognizer in recognizers) {
-            try {
-                recognizer.process(input)
-                    .addOnSuccessListener { res ->
-                        val list = ArrayList<Item>()
-                        for (block in res.textBlocks) {
-                            val rect = block.boundingBox ?: continue
-                            val text = block.text.replace("\n", " ").trim()
-                            if (text.length < 2) continue
-                            list.add(
-                                Item(
-                                    Rect(rect.left + ox, rect.top + oy, rect.right + ox, rect.bottom + oy),
-                                    text,
-                                    max(1, block.lines.size)
-                                )
-                            )
-                        }
-                        complete(list)
+        fun finish(items: List<Item>) {
+            if (finished) return
+            finished = true
+            if (!bmp.isRecycled) bmp.recycle()
+            cb(items)
+        }
+
+        // Fast path: Latin recognizer alone handles the common case.
+        // Only load/run the four script-specific recognizers when Latin OCR finds nothing.
+        try {
+            primary.process(input)
+                .addOnSuccessListener { result ->
+                    val latinItems = parse(result)
+                    if (latinItems.isNotEmpty()) {
+                        finish(latinItems)
+                    } else {
+                        runSpecialized()
                     }
-                    .addOnFailureListener { complete(emptyList()) }
-            } catch (_: Exception) {
-                complete(emptyList())
+                }
+                .addOnFailureListener { runSpecialized() }
+        } catch (_: Exception) {
+            runSpecialized()
+        }
+
+        fun runSpecialized() {
+            if (finished) return
+            if (specialized.isEmpty()) {
+                finish(emptyList())
+                return
+            }
+            val collected = java.util.Collections.synchronizedList(ArrayList<Item>())
+            val remaining = java.util.concurrent.atomic.AtomicInteger(specialized.size)
+            for (recognizer in specialized) {
+                try {
+                    recognizer.process(input)
+                        .addOnSuccessListener { result ->
+                            collected.addAll(parse(result))
+                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                        }
+                        .addOnFailureListener {
+                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                        }
+                } catch (_: Exception) {
+                    if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                }
             }
         }
     }
-
     private fun norm(s: String): String = s.lowercase().replace(Regex("\\s+"), " ").trim()
 
     private fun afterOcr(bmp: Bitmap, all: List<Item>, auto: Boolean) {
