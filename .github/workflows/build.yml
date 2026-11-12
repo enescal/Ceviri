@@ -19,7 +19,6 @@ jobs:
           gradle-version: 8.7
       - run: gradle testDebugUnitTest lintDebug assembleDebug
       - name: Run app smoke test on Android emulator
-        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
