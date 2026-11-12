@@ -310,6 +310,22 @@ class MainActivity : Activity() {
         c3.addView(swAuto)
         c3.addView(swNames)
         c3.addView(swTts)
+        val btnHistory = button("Son çevirileri göster", false)
+        btnHistory.setOnClickListener { showTranslationHistory() }
+        c3.addView(btnHistory)
+        val btnClearHistory = button("Çeviri geçmişini temizle", false)
+        btnClearHistory.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setMessage("Kaydedilmiş çevirilerin tamamı silinsin mi?")
+                .setPositiveButton("Sil") { _, _ ->
+                    prefs.clearHistory()
+                    Toast.makeText(this, "Çeviri geçmişi temizlendi", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Vazgeç", null)
+                .show()
+        }
+        c3.addView(btnClearHistory)
+
         val btnClear = button("\"Bir daha çevirme\" listesini temizle", false)
         btnClear.setOnClickListener {
             prefs.clearIgnored()
@@ -541,6 +557,28 @@ class MainActivity : Activity() {
         refreshRunningBubble()
     }
 
+
+    private fun showTranslationHistory() {
+        val entries = prefs.translationHistory()
+        if (entries.isEmpty()) {
+            Toast.makeText(this, "Henüz kayıtlı çeviri yok", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = entries.map { (original, translated) ->
+            "Orijinal: ${original.take(110)}\nTürkçe: ${translated.take(110)}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Son çeviriler · seçerek kopyala")
+            .setItems(labels) { _, which ->
+                val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(
+                    android.content.ClipData.newPlainText("Çeviri", entries[which].second)
+                )
+                Toast.makeText(this, "Türkçe çeviri kopyalandı", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Kapat", null)
+            .show()
+    }
 
     private fun refreshRunningBubble() {
         try {
