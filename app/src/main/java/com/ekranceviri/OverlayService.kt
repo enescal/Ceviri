@@ -684,23 +684,6 @@ class OverlayService : Service() {
             cb(items)
         }
 
-        // Fast path: Latin recognizer alone handles the common case.
-        // Only load/run the four script-specific recognizers when Latin OCR finds nothing.
-        try {
-            primary.process(input)
-                .addOnSuccessListener { result ->
-                    val latinItems = parse(result)
-                    if (latinItems.isNotEmpty()) {
-                        finish(latinItems)
-                    } else {
-                        runSpecialized()
-                    }
-                }
-                .addOnFailureListener { runSpecialized() }
-        } catch (_: Exception) {
-            runSpecialized()
-        }
-
         fun runSpecialized() {
             if (finished) return
             if (specialized.isEmpty()) {
@@ -724,6 +707,25 @@ class OverlayService : Service() {
                 }
             }
         }
+
+        // Fast path: Latin recognizer alone handles the common case.
+        // Only load/run the four script-specific recognizers when Latin OCR finds nothing.
+        try {
+            primary.process(input)
+                .addOnSuccessListener { result ->
+                    val latinItems = parse(result)
+                    if (latinItems.isNotEmpty()) {
+                        finish(latinItems)
+                    } else {
+                        runSpecialized()
+                    }
+                }
+                .addOnFailureListener { runSpecialized() }
+        } catch (_: Exception) {
+            runSpecialized()
+        }
+
+
     }
     private fun norm(s: String): String = s.lowercase().replace(Regex("\\s+"), " ").trim()
 
