@@ -114,6 +114,7 @@ class OverlayService : Service() {
     private var button: TextView? = null
     private var overlay: View? = null
     private var editor: View? = null
+    private var subtitleSelectionArmed = false
     private var projection: MediaProjection? = null
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
@@ -1135,6 +1136,7 @@ class OverlayService : Service() {
 
     private fun openEditor() {
         if (editor != null) return
+        subtitleSelectionArmed = false
         dismissOverlay()
         val areas = prefs.areas()
         val root = FrameLayout(this)
@@ -1160,7 +1162,7 @@ class OverlayService : Service() {
         subtitle.text = "Altyazı alanı seç"
         subtitle.setOnClickListener {
             areas.clear()
-            prefs.mode = "subtitle"
+            subtitleSelectionArmed = true
             av.invalidate()
             hint.text = "Altyazının bulunduğu tek alanı çiz. Bu alan sürekli izlenecek."
             subtitle.text = "Altyazı alanı seçildi"
