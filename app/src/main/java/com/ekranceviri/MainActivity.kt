@@ -684,7 +684,11 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "Fotoğraf okunamadı", Toast.LENGTH_SHORT).show()
                 return
             }
-            FileOutputStream(photoFile()).use { bmp.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+            try {
+                FileOutputStream(photoFile()).use { bmp.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+            } finally {
+                if (!bmp.isRecycled) bmp.recycle()
+            }
             render()
         } catch (e: Exception) {
             Toast.makeText(this, "Fotoğraf yüklenemedi", Toast.LENGTH_SHORT).show()
