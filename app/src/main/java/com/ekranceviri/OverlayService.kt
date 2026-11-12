@@ -375,7 +375,7 @@ class OverlayService : Service() {
             return
         }
         busy = true
-        capture(false) { bmp -> monitor(bmp) }
+        capture(prefs.mode == "subtitle") { bmp -> monitor(bmp) }
     }
 
     private fun monitor(bmp: Bitmap?) {
@@ -1195,7 +1195,9 @@ class OverlayService : Service() {
 
     private fun closeEditor(areas: List<Rect>) {
         prefs.setAreas(areas)
-        prefs.mode = if (areas.isEmpty()) "full" else "area"
+        val subtitleMode = subtitleSelectionArmed && areas.size == 1
+        subtitleSelectionArmed = false
+        prefs.mode = if (subtitleMode) "subtitle" else if (areas.isEmpty()) "full" else "area"
         editor?.let {
             try {
                 wm.removeView(it)
@@ -1204,7 +1206,7 @@ class OverlayService : Service() {
         }
         editor = null
         resetAutoState()
-        if (prefs.mode == "subtitle" && areas.isNotEmpty()) {
+        if (subtitleMode) {
             autoOn = true
             prefs.auto = true
             handler.removeCallbacks(autoRunnable)
