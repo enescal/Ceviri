@@ -3,7 +3,7 @@ on:
   push:
   workflow_dispatch:
 concurrency:
-  group: android-build-${{ github.ref }}-${{ github.sha }}
+  group: android-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
