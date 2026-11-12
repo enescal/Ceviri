@@ -1124,13 +1124,6 @@ class OverlayService : Service() {
         )
     }
 
-    private fun activeColor(): Int {
-        return Color.argb(
-            (prefs.bubbleOpacity * 255 / 100).coerceIn(0, 255),
-            20, 160, 70
-        )
-    }
-
     private fun bubbleBackground(color: Int): GradientDrawable {
         val bg = GradientDrawable()
         val px = prefs.bubbleSize * resources.displayMetrics.density
@@ -1150,8 +1143,15 @@ class OverlayService : Service() {
     }
 
     private fun updateButtonLook() {
-        val color = if (autoOn) activeColor() else idleColor()
-        button?.background = bubbleBackground(color)
+        // Keep the selected color in both modes; auto mode is marked by a contrasting outline.
+        val color = idleColor()
+        val background = bubbleBackground(color)
+        if (autoOn) {
+            val luminance = 0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)
+            val outline = if (luminance > 155) Color.BLACK else Color.WHITE
+            background.setStroke((2 * resources.displayMetrics.density).toInt(), outline)
+        }
+        button?.background = background
         val luminance = 0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)
         button?.setTextColor(if (luminance > 155) Color.BLACK else Color.WHITE)
     }
@@ -1181,7 +1181,7 @@ class OverlayService : Service() {
         handler.removeCallbacks(autoRunnable)
         resetAutoState()
         if (autoOn) {
-            toast("Otomatik çeviri açık (buton yeşil)")
+            toast("Otomatik çeviri açık (baloncuk çerçeveli)")
             handler.postDelayed(autoRunnable, prefs.autoIntervalMs.toLong())
         } else {
             dismissOverlay()
