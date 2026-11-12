@@ -14,14 +14,12 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.graphics.Color
 import android.graphics.Typeface
-import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
-import java.util.concurrent.Executors
 
 /**
  * Optional text-tree translation path. It complements MediaProjection OCR:
@@ -30,12 +28,13 @@ import java.util.concurrent.Executors
  */
 class AccessibilityTranslateService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
     private lateinit var wm: WindowManager
     private val translators = HashMap<String, Translator>()
+    private val languageIdentifier by lazy { LanguageIdentification.getClient() }
     private val cache = LinkedHashMap<String, String>(160, 0.75f, true)
     private var overlay: FrameLayout? = null
     private var lastFingerprint = ""
+    @Volatile private var scanGeneration = 0
 
     private val scanRunnable = Runnable { scanVisibleText() }
 
@@ -66,18 +65,30 @@ class AccessibilityTranslateService : AccessibilityService() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         clearOverlay()
+        scanGeneration++
         translators.values.forEach { try { it.close() } catch (_: Exception) {} }
         translators.clear()
-        executor.shutdownNow()
+        if (languageIdentifier.isInitialized()) {
+            try { languageIdentifier.value.close() } catch (_: Exception) {}
+        }
         super.onDestroy()
     }
 
     private data class TextNode(val text: String, val bounds: Rect)
 
     private fun scanVisibleText() {
-        val root = rootInActiveWindow ?: return
+        val root = rootInActiveWindow
+        if (root == null) {
+            scanGeneration++
+            lastFingerprint = ""
+            clearOverlay()
+            return
+        }
         if (root.packageName?.toString() == packageName) {
             root.recycle()
+            scanGeneration++
+            lastFingerprint = ""
+            clearOverlay()
             return
         }
         val found = ArrayList<TextNode>()
@@ -86,6 +97,7 @@ class AccessibilityTranslateService : AccessibilityService() {
         val unique = found.distinctBy { it.text.lowercase() + "|" + it.bounds.toShortString() }
             .take(24)
         if (unique.isEmpty()) {
+            scanGeneration++
             lastFingerprint = ""
             clearOverlay()
             return
@@ -93,6 +105,7 @@ class AccessibilityTranslateService : AccessibilityService() {
         val fingerprint = unique.joinToString("|") { it.text + it.bounds.toShortString() }
         if (fingerprint == lastFingerprint) return
         lastFingerprint = fingerprint
+        val generation = ++scanGeneration
         val translated = java.util.Collections.synchronizedList(ArrayList<Pair<TextNode, String>>())
         val remaining = java.util.concurrent.atomic.AtomicInteger(unique.size)
         for (node in unique) {
@@ -109,7 +122,15 @@ class AccessibilityTranslateService : AccessibilityService() {
                         }
                         translated.add(node to result)
                     }
-                    if (remaining.decrementAndGet() == 0) handler.post { render(translated.toList()) }
+                    if (remaining.decrementAndGet() == 0) handler.post {
+                        if (generation == scanGeneration) {
+                            val completed = translated.toList()
+                            if (completed.isEmpty()) {
+                                lastFingerprint = ""
+                                clearOverlay()
+                            } else render(completed)
+                        }
+                    }
                 }
             }
         }
@@ -135,7 +156,7 @@ class AccessibilityTranslateService : AccessibilityService() {
     }
 
     private fun translateNode(node: TextNode, callback: (String?) -> Unit) {
-        LanguageIdentification.getClient().identifyLanguage(node.text)
+        languageIdentifier.identifyLanguage(node.text)
             .addOnSuccessListener { language ->
                 if (language == "und" || language == "tr") {
                     callback(null)
