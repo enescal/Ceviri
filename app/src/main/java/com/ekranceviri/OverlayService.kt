@@ -1145,7 +1145,10 @@ class OverlayService : Service() {
     }
 
     private fun updateButtonLook() {
-        button?.background = bubbleBackground(if (autoOn) activeColor() else idleColor())
+        val color = if (autoOn) activeColor() else idleColor()
+        button?.background = bubbleBackground(color)
+        val luminance = 0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)
+        button?.setTextColor(if (luminance > 155) Color.BLACK else Color.WHITE)
     }
 
     private fun applyButtonAppearance() {
