@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var rbArea: RadioButton
     private lateinit var swTts: Switch
     private lateinit var swNames: Switch
+    private lateinit var swMultiOcr: Switch
     private lateinit var rgBubbleShape: RadioGroup
     private lateinit var sbBubbleSize: SeekBar
     private lateinit var sbBubbleOpacity: SeekBar
@@ -307,9 +308,11 @@ class MainActivity : Activity() {
         swAuto = sw("Otomatik mod: Ç'ye bir kez bas, ekran durunca kendisi çevirsin")
         swNames = sw("İsimleri koru (DeepL'de çalışır, Gemini zaten korur)")
         swTts = sw("Çeviriyi Türkçe sesle oku (seçili alan modunda)")
+        swMultiOcr = sw("Gelişmiş çok dilli OCR (Japonca, Korece, Çince ve Latin birlikte; daha doğru ama daha fazla işlem)")
         c3.addView(swAuto)
         c3.addView(swNames)
         c3.addView(swTts)
+        c3.addView(swMultiOcr)
 
         val accessibilityInfo = label(
             "İsteğe bağlı: Normal uygulama yazılarını OCR kullanmadan okumayı dener. Oyun ve resim içindeki yazılarda ekran OCR modu kullanılır. Parola ve yazı giriş alanları atlanır.",
@@ -534,6 +537,7 @@ class MainActivity : Activity() {
         rbArea.isChecked = prefs.mode == "area"
         rbFull.isChecked = prefs.mode != "area"
         swTts.isChecked = prefs.tts
+        swMultiOcr.isChecked = prefs.multilingualOcr
         swNames.isChecked = prefs.protectNames
         rgBubbleShape.check(when (prefs.bubbleShape) {
             "rounded" -> 402
@@ -567,6 +571,7 @@ class MainActivity : Activity() {
         prefs.auto = swAuto.isChecked
         prefs.mode = if (rbArea.isChecked) "area" else "full"
         prefs.tts = swTts.isChecked
+        prefs.multilingualOcr = swMultiOcr.isChecked
         prefs.protectNames = swNames.isChecked
         prefs.bubbleShape = when (rgBubbleShape.checkedRadioButtonId) {
             402 -> "rounded"
