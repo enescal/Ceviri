@@ -226,7 +226,7 @@ object Gemini {
         val out = ArrayList<String>()
         var i = 0
         while (i < texts.size) {
-            val chunk = texts.subList(i, minOf(i + 5, texts.size))
+            val chunk = texts.subList(i, minOf(i + 20, texts.size))
             val r = post(key.trim(), safeModel, chunk) ?: return null
             if (r.size != chunk.size) {
                 lastError = "Gemini eksik çeviri döndürdü"
@@ -261,7 +261,7 @@ object Gemini {
                 )
                 val generation = JSONObject()
                     .put("responseMimeType", "application/json")
-                    .put("maxOutputTokens", 2048)
+                    .put("maxOutputTokens", 4096)
                     .put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
                 body.put("generationConfig", generation)
 
@@ -270,9 +270,9 @@ object Gemini {
                 stage = "Google sunucusuna bağlanılıyor"
                 connection = URL(url).openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
-                connection.connectTimeout = 15000
+                connection.connectTimeout = 10000
                 // Gemini 3.x yanıtları yoğun sunucu yükünde 25 saniyeyi aşabiliyor.
-                connection.readTimeout = 60000
+                connection.readTimeout = 30000
                 connection.useCaches = false
                 connection.doOutput = true
                 connection.setRequestProperty("x-goog-api-key", key)
@@ -355,8 +355,10 @@ object Gemini {
                     else -> stage + " aşamasında hata: " +
                         (e.message ?: e.javaClass.simpleName).take(100)
                 }
-                if (attempt < 1 && e is java.io.IOException) {
-                    try { Thread.sleep(700L * (attempt + 1)) } catch (_: InterruptedException) {
+                // A socket timeout is already a long wait; retrying it doubles the user's delay.
+                // Retry only short-lived connection failures, never a timed-out generation.
+                if (attempt < 1 && e is java.io.IOException && e !is java.net.SocketTimeoutException) {
+                    try { Thread.sleep(350L) } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
                         return null
                     }
