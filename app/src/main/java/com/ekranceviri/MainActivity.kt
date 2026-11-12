@@ -320,7 +320,7 @@ class MainActivity : Activity() {
         // Yüzen baloncuk kişiselleştirme
         val cBubble = card(root, "Yüzen baloncuk")
         cBubble.addView(label("Baloncuk şekli", 14f, true))
-        rgBubbleShape = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        rgBubbleShape = RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
         rgBubbleShape.addView(radio("Daire", 401))
         rgBubbleShape.addView(radio("Yuvarlak kare", 402))
         rgBubbleShape.addView(radio("Kare", 403))
