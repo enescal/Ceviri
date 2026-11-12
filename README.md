@@ -38,7 +38,7 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 
 - **İnternetsiz:** ML Kit çeviri dil paketini ilk kullanımda indirir; sonraki çeviriler cihazda yapılır. OCR modelleri de ilk kullanımda Google Play Hizmetleri üzerinden indirilebilir.
 - **DeepL:** DeepL API anahtarı gerekir.
-- **Gemini:** Google AI Studio API anahtarı gerekir. Varsayılan model `gemini-3.8-flash` kullanılır; model alanı boş bırakılırsa otomatik seçilir. Geçici bağlantı/kota hatalarında uygulama çevrimdışı çeviriye geri döner.
+- **Gemini:** Google AI Studio API anahtarı gerekir. Varsayılan model `gemini-3.1-flash-lite` kullanılır; model alanı boş bırakılırsa otomatik seçilir. Geçici bağlantı/kota hatalarında uygulama çevrimdışı çeviriye geri döner.
 
 API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese açık depoya veya ekran görüntülerine koyma.
 
@@ -64,4 +64,4 @@ API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese aç�
 ## Önceki ekran çeviri özellikleri (1.5)
 - İsteğe bağlı Android Accessibility metin okuma: normal erişilebilir metin düğümlerini OCR'sız çevirmeyi dener; parola ve düzenlenebilir alanları atlar. Oyun/canvas yazılarında MediaProjection OCR kullanılmaya devam eder.
 - Uzun basılan çeviri satırı için Gemini bağlamlı ikinci çeviri: aynı ekrandaki komşu OCR metinlerini bağlam olarak kullanır.
-- Gelişmiş çok dilli OCR: Latin, Çince, Devanagari, Japonca ve Korece tanıyıcılarını paralel çalıştırarak karışık alfabeli ekranlarda metin kaybını azaltır. Hız modu da korunur.
+- Gelişmiş çok dilli OCR: Latin, Çince, Devanagari, Japonca ve Korece tanıyıcılarını sırayla çalıştırarak karışık alfabeli ekranlarda metin kaybını azaltır ve bellek kullanımını sınırlar. Hız modu da korunur.
