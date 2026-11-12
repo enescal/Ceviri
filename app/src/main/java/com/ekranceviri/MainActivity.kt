@@ -336,7 +336,8 @@ class MainActivity : Activity() {
             "Kırmızı" to 0xFFE53935.toInt(),
             "Beyaz" to 0xFFF2F2F2.toInt()
         )
-        val colorButton = button("Baloncuk rengini seç", false)
+        val initialColorName = palette.entries.firstOrNull { it.value == prefs.bubbleColor }?.key ?: "Özel"
+        val colorButton = button("Baloncuk rengi: $initialColorName", false)
         colorButton.setOnClickListener {
             val entries = palette.keys.toTypedArray()
             val selected = palette.values.indexOf(prefs.bubbleColor).coerceAtLeast(0)
@@ -537,6 +538,7 @@ class MainActivity : Activity() {
         prefs.bubbleOpacity = sbBubbleOpacity.progress + 35
         prefs.autoIntervalMs = intArrayOf(250, 400, 650, 1000)[sbAutoInterval.progress.coerceIn(0, 3)]
         prefs.bubbleText = etBubbleLabel.text.toString()
+        refreshRunningBubble()
     }
 
 
