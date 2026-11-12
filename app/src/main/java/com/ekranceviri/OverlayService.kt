@@ -1158,9 +1158,12 @@ class OverlayService : Service() {
 
     private fun applyButtonAppearance() {
         val btn = button ?: return
+        val wasRightDocked = lp.x + lp.width >= width - (8 * resources.displayMetrics.density).toInt()
         val px = (prefs.bubbleSize * resources.displayMetrics.density).toInt()
         lp.width = px
         lp.height = px
+        lp.x = if (wasRightDocked) max(0, width - px) else lp.x.coerceIn(0, max(0, width - px))
+        lp.y = lp.y.coerceIn(0, max(0, height - px))
         btn.text = prefs.bubbleText
         btn.textSize = (prefs.bubbleSize * 0.36f).coerceIn(14f, 28f)
         updateButtonLook()
