@@ -939,7 +939,7 @@ class OverlayService : Service() {
             fail("Gemini anahtarı girilmemiş", auto)
             return
         }
-        val model = prefs.geminiModel.ifBlank { "gemini-3.8-flash" }
+        val model = prefs.geminiModel.ifBlank { "gemini-3.1-flash-lite" }
         val payload = missing.map { items[it].text }
         if (!auto) toast("Gemini ile çevriliyor...")
         Thread {
