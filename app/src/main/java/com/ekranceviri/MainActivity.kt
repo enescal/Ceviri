@@ -239,7 +239,7 @@ class MainActivity : Activity() {
         etGemini = edit("Gemini anahtarı (aistudio.google.com)")
         etGemini.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         c1.addView(etGemini)
-        etModel = edit("Gemini modeli (varsayılan: gemini-3.8-flash)")
+        etModel = edit("Gemini modeli (varsayılan: gemini-3.1-flash-lite)")
         c1.addView(etModel)
         val btnTest = button("Gemini anahtarını test et", false)
         btnTest.setOnClickListener { testGemini() }
@@ -567,7 +567,7 @@ class MainActivity : Activity() {
         prefs.deeplKey = etDeepl.text.toString()
         prefs.geminiKey = etGemini.text.toString()
         val m = etModel.text.toString().trim()
-        prefs.geminiModel = if (m.isEmpty()) "gemini-3.8-flash" else m
+        prefs.geminiModel = if (m.isEmpty()) "gemini-3.1-flash-lite" else m
         prefs.auto = swAuto.isChecked
         prefs.mode = if (rbArea.isChecked) "area" else "full"
         prefs.tts = swTts.isChecked
