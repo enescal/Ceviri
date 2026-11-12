@@ -877,21 +877,32 @@ class OverlayService : Service() {
         translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
             .addOnSuccessListener {
                 var left = missing.size
+                var firstFailure: String? = null
                 for (i in missing) {
                     translator.translate(items[i].text).addOnCompleteListener { t ->
-                        if (t.isSuccessful) {
+                        if (t.isSuccessful && !t.result.isNullOrBlank()) {
                             result[i] = t.result
                             cache["offline|$src|${items[i].text}"] = t.result
                         } else {
-                            result[i] = items[i].text
+                            if (firstFailure == null) {
+                                firstFailure = t.exception?.localizedMessage
+                                    ?: "ML Kit boş veya başarısız sonuç döndürdü"
+                            }
                         }
                         left--
-                        if (left == 0) show(bmp, items, result, auto)
+                        if (left == 0) {
+                            val error = firstFailure
+                            if (error != null) {
+                                fail("Çevrimdışı çeviri başarısız: $error", auto)
+                            } else {
+                                show(bmp, items, result, auto)
+                            }
+                        }
                     }
                 }
             }
-            .addOnFailureListener {
-                fail("Dil paketi inemedi, internet var mı?", auto)
+            .addOnFailureListener { error ->
+                fail("Çevrimdışı dil paketi indirilemedi: ${error.localizedMessage ?: error.javaClass.simpleName}", auto)
             }
     }
     // İnternetli motor hata verirse çeviri durmasın, internetsiz motora geç
