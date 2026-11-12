@@ -369,10 +369,10 @@ object Gemini {
                     .put("maxOutputTokens", 4096)
                     .put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
                     .put(
-                        "responseJsonSchema",
+                        "responseSchema",
                         JSONObject()
-                            .put("type", "array")
-                            .put("items", JSONObject().put("type", "string"))
+                            .put("type", "ARRAY")
+                            .put("items", JSONObject().put("type", "STRING"))
                     )
                 body.put("generationConfig", generation)
 
