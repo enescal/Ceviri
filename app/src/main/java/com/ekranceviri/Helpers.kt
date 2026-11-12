@@ -301,7 +301,37 @@ object Gemini {
         return out
     }
 
-    private fun post(key: String, model: String, chunk: List<String>): List<String>? {
+    /**
+     * User-triggered second-pass translation using nearby OCR text as dialogue context.
+     * The selected text is translated naturally rather than merely explained literally.
+     */
+    fun contextualTranslate(
+        key: String,
+        model: String,
+        original: String,
+        currentTranslation: String,
+        nearbyText: String
+    ): String? {
+        if (key.isBlank()) {
+            lastError = "Gemini API anahtarı boş"
+            return null
+        }
+        val request = "SOURCE TEXT:\\n$original\\n\\nCURRENT LITERAL TRANSLATION:\\n$currentTranslation" +
+            "\\n\\nNEARBY SCREEN DIALOGUE (context only):\\n" + nearbyText.take(1800) +
+            "\\n\\nReturn one natural, context-aware Turkish translation of SOURCE TEXT only. " +
+            "Preserve character names and game terminology. Do not translate the context."
+        val instructions =
+            "You are a professional game and conversation localization translator. " +
+            "Each user message is a JSON array containing one request with source text, a draft translation, " +
+            "and nearby dialogue context. Use the context to resolve pronouns, tone, idioms and speaker intent. " +
+            "Return ONLY a JSON array with exactly one fluent Turkish string. Do not include explanations."
+        return post(key.trim(), model.trim().ifBlank { "gemini-3.8-flash" }, listOf(request), instructions)
+            ?.firstOrNull()
+    }
+
+    private fun post(
+        key: String, model: String, chunk: List<String>, systemPrompt: String = SYSTEM
+    ): List<String>? {
         for (attempt in 0..1) {
             var connection: HttpURLConnection? = null
             var stage = "istek hazırlanıyor"
@@ -312,7 +342,7 @@ object Gemini {
                 val body = JSONObject()
                 body.put(
                     "systemInstruction",
-                    JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM)))
+                    JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt)))
                 )
                 body.put(
                     "contents",
