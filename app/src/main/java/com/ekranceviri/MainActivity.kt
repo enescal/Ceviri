@@ -274,6 +274,16 @@ class MainActivity : Activity() {
         }
         c1.addView(btnHy)
 
+        val btnImportHy = button("HY-MT ZIP dosyasını telefondan seç", false)
+        btnImportHy.setOnClickListener {
+            val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+            }
+            startActivityForResult(picker, 201)
+        }
+        c1.addView(btnImportHy)
+
         // Ne çevrilsin
         val c2 = card(root, "Ne çevrilsin?")
         val g2 = RadioGroup(this)
@@ -476,6 +486,32 @@ class MainActivity : Activity() {
         if (requestCode == 200 && resultCode == RESULT_OK) {
             val uri = data?.data
             if (uri != null) savePhoto(uri)
+            return
+        }
+        if (requestCode == 201 && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            val input = contentResolver.openInputStream(uri)
+            if (input == null) {
+                Toast.makeText(this, "Seçilen dosya açılamadı", Toast.LENGTH_LONG).show()
+                return
+            }
+            Toast.makeText(this, "HY-MT dosyası kontrol ediliyor ve yükleniyor…", Toast.LENGTH_LONG).show()
+            HyMtModelManager(this).importArchive(input, object : HyMtModelManager.Listener {
+                override fun onProgress(progress: HyMtModelManager.Progress) {
+                    runOnUiThread {
+                        val percent = if (progress.total > 0) {
+                            (progress.downloaded * 100 / progress.total).toInt().coerceIn(0, 100)
+                        } else 0
+                        // Progress is also reflected in the persistent notification/toast below.
+                    }
+                }
+                override fun onComplete(success: Boolean, message: String) {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                        render()
+                    }
+                }
+            })
             return
         }
         if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
