@@ -32,8 +32,12 @@ object HyMtEngine {
 
     fun isReady(context: Context): Boolean {
         val dir = java.io.File(context.applicationContext.filesDir, "Translation/HY-MT")
-        return java.io.File(dir, "model_int8_final.onnx").let { it.isFile && it.length() > 100_000_000L } &&
-            java.io.File(dir, "tokenizer.json").let { it.isFile && it.length() > 100_000L }
+        val model = java.io.File(dir, "model_int8_final.onnx")
+        val tokenizer = java.io.File(dir, "tokenizer.json")
+        val hasWeights = model.isFile && model.length() > 100_000_000L ||
+            (dir.listFiles()?.any { it.isFile && it != tokenizer && it != model && it.length() > 100_000_000L } == true)
+        return model.isFile && model.length() > 1_000_000L && hasWeights &&
+            tokenizer.isFile && tokenizer.length() > 100_000L
     }
 
     private fun ensureLoaded(context: Context) {
@@ -103,7 +107,8 @@ object HyMtEngine {
             var previous: OrtSession.Result? = null
             val emptyCache = OnnxTensor.createTensor(env, FloatBuffer.allocate(0), longArrayOf(1, KV_HEADS.toLong(), 0, HEAD_SIZE.toLong()))
             try {
-                for (step in 0 until MAX_NEW_TOKENS) {
+                val tokenBudget = (text.length * 2).coerceIn(48, MAX_NEW_TOKENS)
+                for (step in 0 until tokenBudget) {
                     val idsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(currentIds), longArrayOf(1, currentIds.size.toLong()))
                     val mask = LongArray(attentionLength) { 1L }
                     val maskTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(mask), longArrayOf(1, attentionLength.toLong()))
