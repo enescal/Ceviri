@@ -1,6 +1,7 @@
 package com.ekranceviri
 
 import android.content.Context
+import android.app.ActivityManager
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
@@ -30,7 +31,16 @@ object HyMtEngine {
     @Volatile private var tokenizer: HuggingFaceTokenizer? = null
     private val lock = Any()
 
+    // Avoid loading this very large native model when Android reports low free RAM.
+    private fun hasInferenceMemory(context: Context): Boolean {
+        val manager = context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        val memory = ActivityManager.MemoryInfo()
+        manager.getMemoryInfo(memory)
+        return !memory.lowMemory && memory.availMem >= 2_500_000_000L
+    }
+
     fun isReady(context: Context): Boolean {
+        if (!hasInferenceMemory(context)) return false
         val dir = java.io.File(context.applicationContext.filesDir, "Translation/HY-MT")
         val model = java.io.File(dir, "model_int8_final.onnx")
         val tokenizer = java.io.File(dir, "tokenizer.json")
@@ -51,9 +61,9 @@ object HyMtEngine {
             val env = OrtEnvironment.getEnvironment()
             val options = OrtSession.SessionOptions().apply {
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.EXTENDED_OPT)
-                setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(6))
+                setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceAtMost(2))
                 setInterOpNumThreads(1)
-                setMemoryPatternOptimization(true)
+                setMemoryPatternOptimization(false)
                 setCPUArenaAllocator(true)
             }
             try {
