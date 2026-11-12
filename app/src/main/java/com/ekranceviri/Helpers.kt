@@ -28,8 +28,8 @@ class Prefs(ctx: Context) {
     var geminiModel: String
         get() {
             val saved = sp.getString("geminiModel", null)?.trim().orEmpty()
-            return if (saved.isBlank() || saved == "gemini-flash-latest") {
-                "gemini-3.8-flash"
+            return if (saved.isBlank() || saved == "gemini-flash-latest" || saved == "gemini-3.8-flash") {
+                "gemini-3.1-flash-lite"
             } else saved
         }
         set(v) { sp.edit().putString("geminiModel", v.trim()).apply() }
@@ -278,11 +278,13 @@ object Gemini {
     @Volatile var lastModelVersion = ""
 
     private const val SYSTEM =
-        "Translate every item from its original language into natural, fluent Turkish. " +
-            "The user message is a JSON array of strings. Return ONLY a JSON array of strings " +
-            "with exactly the same length and order. Keep proper nouns, character names, item names, " +
-            "game terms, brand names, numbers and symbols unchanged. " +
-            "If an item is already Turkish or is only a symbol or number, return it unchanged."
+        "You are a professional Turkish localization translator. Translate every translatable " +
+            "word and sentence into natural, fluent Turkish. This includes dialogue, interface text, " +
+            "game terminology, descriptions and subtitles. Do NOT leave English phrases untranslated. " +
+            "Preserve only proper names, brand names, character names, numbers and standalone symbols. " +
+            "The user message is a JSON array of source strings. Return ONLY a JSON array of translated " +
+            "strings with exactly the same number of elements and in the same order. " +
+            "If an item is already Turkish or contains only symbols/numbers, return it unchanged."
 
     fun translate(key: String, model: String, texts: List<String>): List<String>? {
         if (key.isBlank()) {
@@ -330,7 +332,7 @@ object Gemini {
             "Each user message is a JSON array containing one request with source text, a draft translation, " +
             "and nearby dialogue context. Use the context to resolve pronouns, tone, idioms and speaker intent. " +
             "Return ONLY a JSON array with exactly one fluent Turkish string. Do not include explanations."
-        return post(key.trim(), model.trim().ifBlank { "gemini-3.8-flash" }, listOf(request), instructions)
+        return post(key.trim(), model.trim().ifBlank { "gemini-3.1-flash-lite" }, listOf(request), instructions)
             ?.firstOrNull()
     }
 
@@ -360,7 +362,13 @@ object Gemini {
                 val generation = JSONObject()
                     .put("responseMimeType", "application/json")
                     .put("maxOutputTokens", 4096)
-                    .put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
+                    .put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
+                    .put(
+                        "responseJsonSchema",
+                        JSONObject()
+                            .put("type", "array")
+                            .put("items", JSONObject().put("type", "string"))
+                    )
                 body.put("generationConfig", generation)
 
                 val url = "https://generativelanguage.googleapis.com/v1beta/models/" +
@@ -426,10 +434,15 @@ object Gemini {
                 val first = raw.indexOf('[')
                 val last = raw.lastIndexOf(']')
                 if (first < 0 || last < first) {
-                    lastError = "Gemini geçerli JSON listesi döndürmedi"
+                    lastError = "Gemini JSON yerine metin döndürdü: " + raw.take(100)
                     return null
                 }
-                val arr = JSONArray(raw.substring(first, last + 1))
+                val arr = try {
+                    JSONArray(raw.substring(first, last + 1))
+                } catch (e: Exception) {
+                    lastError = "Gemini JSON yanıtı çözülemedi: " + raw.take(120)
+                    return null
+                }
                 if (arr.length() != chunk.size) {
                     lastError = "Gemini eksik sayıda öğe döndürdü"
                     return null
