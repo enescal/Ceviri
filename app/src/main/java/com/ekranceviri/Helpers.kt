@@ -99,6 +99,36 @@ class Prefs(ctx: Context) {
         sp.edit().remove("ignored").apply()
     }
 
+    fun translationHistory(): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val array = try { JSONArray(sp.getString("translationHistory", "[]")) }
+        catch (_: Exception) { JSONArray() }
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            val original = item.optString("original")
+            val translated = item.optString("translated")
+            if (original.isNotBlank() && translated.isNotBlank()) out.add(original to translated)
+        }
+        return out
+    }
+
+    fun addHistory(original: String, translated: String) {
+        if (original.isBlank() || translated.isBlank()) return
+        val recent = translationHistory()
+        if (recent.firstOrNull() == (original to translated)) return
+        val array = JSONArray()
+        array.put(JSONObject().put("original", original.take(1200))
+            .put("translated", translated.take(1200)).put("time", System.currentTimeMillis()))
+        for (entry in recent.take(49)) {
+            array.put(JSONObject().put("original", entry.first).put("translated", entry.second))
+        }
+        sp.edit().putString("translationHistory", array.toString()).apply()
+    }
+
+    fun clearHistory() {
+        sp.edit().remove("translationHistory").apply()
+    }
+
     fun areas(): MutableList<Rect> {
         val out = ArrayList<Rect>()
         val s = sp.getString("areas", "") ?: ""
