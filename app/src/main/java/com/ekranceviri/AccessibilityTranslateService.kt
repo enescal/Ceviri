@@ -30,7 +30,7 @@ class AccessibilityTranslateService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var wm: WindowManager
     private val translators = HashMap<String, Translator>()
-    private val languageIdentifier by lazy { LanguageIdentification.getClient() }
+    private val languageIdentifier = LanguageIdentification.getClient()
     private val cache = LinkedHashMap<String, String>(160, 0.75f, true)
     private var overlay: FrameLayout? = null
     private var lastFingerprint = ""
@@ -68,9 +68,7 @@ class AccessibilityTranslateService : AccessibilityService() {
         scanGeneration++
         translators.values.forEach { try { it.close() } catch (_: Exception) {} }
         translators.clear()
-        if (languageIdentifier.isInitialized()) {
-            try { languageIdentifier.value.close() } catch (_: Exception) {}
-        }
+        try { languageIdentifier.close() } catch (_: Exception) {}
         super.onDestroy()
     }
 
