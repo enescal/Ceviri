@@ -961,9 +961,56 @@ class OverlayService : Service() {
                     toast("Çeviri kopyalandı")
                 }
                 tv.setOnLongClickListener {
-                    prefs.addIgnored(norm(item.text))
-                    root.removeView(tv)
-                    toast("Bu yazı bir daha çevrilmeyecek")
+                    val choices = arrayOf("Gemini ile bağlamlı çevir", "Bu yazıyı bir daha çevirme")
+                    val menu = AlertDialog.Builder(this)
+                        .setTitle("Metin işlemleri")
+                        .setItems(choices) { _, which ->
+                            if (which == 1) {
+                                prefs.addIgnored(norm(item.text))
+                                root.removeView(tv)
+                                toast("Bu yazı bir daha çevrilmeyecek")
+                            } else {
+                                val key = prefs.geminiKey
+                                if (key.isBlank()) {
+                                    toast("Bağlamlı AI çevirisi için Gemini API anahtarını ayarlardan gir")
+                                } else {
+                                    val contextText = items.indices
+                                        .filter { it != i }
+                                        .take(12)
+                                        .joinToString("\\n") { items[it].text }
+                                    toast("Gemini ekran bağlamını kullanarak yeniden çeviriyor…")
+                                    Thread {
+                                        val contextual = Gemini.contextualTranslate(
+                                            key, prefs.geminiModel, item.text, tr, contextText
+                                        )
+                                        handler.post {
+                                            if (contextual.isNullOrBlank()) {
+                                                errToast("Bağlamlı çeviri başarısız: ${Gemini.lastError}")
+                                            } else {
+                                                val dialog = AlertDialog.Builder(this)
+                                                    .setTitle("Bağlamlı AI çevirisi")
+                                                    .setMessage(contextual)
+                                                    .setPositiveButton("Kopyala") { _, _ ->
+                                                        val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                                                        clipboard?.setPrimaryClip(
+                                                            android.content.ClipData.newPlainText("Bağlamlı çeviri", contextual)
+                                                        )
+                                                        toast("Bağlamlı çeviri kopyalandı")
+                                                    }
+                                                    .setNegativeButton("Kapat", null)
+                                                    .create()
+                                                dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                                                dialog.show()
+                                            }
+                                        }
+                                    }.start()
+                                }
+                            }
+                        }
+                        .setNegativeButton("Kapat", null)
+                        .create()
+                    menu.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                    menu.show()
                     true
                 }
             }
