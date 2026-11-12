@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var swTts: Switch
     private lateinit var swNames: Switch
     private lateinit var swMultiOcr: Switch
+    private lateinit var swAccessibilityTranslation: Switch
     private lateinit var rgBubbleShape: RadioGroup
     private lateinit var sbBubbleSize: SeekBar
     private lateinit var sbBubbleOpacity: SeekBar
@@ -309,13 +310,15 @@ class MainActivity : Activity() {
         swNames = sw("İsimleri koru (DeepL'de çalışır, Gemini zaten korur)")
         swTts = sw("Çeviriyi Türkçe sesle oku (seçili alan modunda)")
         swMultiOcr = sw("Gelişmiş çok dilli OCR (Japonca, Korece, Çince ve Latin birlikte; daha doğru ama daha fazla işlem)")
+        swAccessibilityTranslation = sw("Erişilebilirlik metinlerini otomatik çevir (isteğe bağlı)")
         c3.addView(swAuto)
         c3.addView(swNames)
         c3.addView(swTts)
         c3.addView(swMultiOcr)
+        c3.addView(swAccessibilityTranslation)
 
         val accessibilityInfo = label(
-            "İsteğe bağlı: Normal uygulama yazılarını OCR kullanmadan okumayı dener. Oyun ve resim içindeki yazılarda ekran OCR modu kullanılır. Parola ve yazı giriş alanları atlanır.",
+            "Erişilebilirlik metin çevirisi varsayılan olarak kapalıdır. Açarsan normal uygulama metinlerini otomatik okur ve çevirir; kapalıyken izin açık olsa bile kendi kendine çeviri yapmaz.",
             12f, false
         )
         c3.addView(accessibilityInfo)
@@ -538,6 +541,7 @@ class MainActivity : Activity() {
         rbFull.isChecked = prefs.mode != "area"
         swTts.isChecked = prefs.tts
         swMultiOcr.isChecked = prefs.multilingualOcr
+        swAccessibilityTranslation.isChecked = prefs.accessibilityTranslationEnabled
         swNames.isChecked = prefs.protectNames
         rgBubbleShape.check(when (prefs.bubbleShape) {
             "rounded" -> 402
@@ -572,6 +576,7 @@ class MainActivity : Activity() {
         prefs.mode = if (rbArea.isChecked) "area" else "full"
         prefs.tts = swTts.isChecked
         prefs.multilingualOcr = swMultiOcr.isChecked
+        prefs.accessibilityTranslationEnabled = swAccessibilityTranslation.isChecked
         prefs.protectNames = swNames.isChecked
         prefs.bubbleShape = when (rgBubbleShape.checkedRadioButtonId) {
             402 -> "rounded"
