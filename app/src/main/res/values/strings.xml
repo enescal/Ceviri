@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Ekrandaki normal metin öğelerini Türkçeye çevirmek için kullanılır. Parola ve yazı giriş alanları okunmaz. Oyunlardaki çizim tabanlı yazılar için ekran OCR modu kullanılmaya devam eder.</string>
+</resources>
