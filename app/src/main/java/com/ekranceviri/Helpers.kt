@@ -38,6 +38,39 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("theme", 0)
         set(v) { sp.edit().putInt("theme", v).apply() }
 
+    // Floating translation bubble appearance and dock position.
+    var bubbleShape: String
+        get() = sp.getString("bubbleShape", "circle") ?: "circle"
+        set(v) { sp.edit().putString("bubbleShape", v).apply() }
+
+    var bubbleColor: Int
+        get() = sp.getInt("bubbleColor", 0xFF4F6BED.toInt())
+        set(v) { sp.edit().putInt("bubbleColor", v).apply() }
+
+    var bubbleSize: Int
+        get() = sp.getInt("bubbleSize", 56).coerceIn(40, 80)
+        set(v) { sp.edit().putInt("bubbleSize", v.coerceIn(40, 80)).apply() }
+
+    var bubbleOpacity: Int
+        get() = sp.getInt("bubbleOpacity", 90).coerceIn(35, 100)
+        set(v) { sp.edit().putInt("bubbleOpacity", v.coerceIn(35, 100)).apply() }
+
+    var bubbleText: String
+        get() = sp.getString("bubbleText", "Ç") ?: "Ç"
+        set(v) { sp.edit().putString("bubbleText", v.trim().take(3).ifBlank { "Ç" }).apply() }
+
+    var bubbleX: Int
+        get() = sp.getInt("bubbleX", -1)
+        set(v) { sp.edit().putInt("bubbleX", v.coerceAtLeast(0)).apply() }
+
+    var bubbleY: Int
+        get() = sp.getInt("bubbleY", -1)
+        set(v) { sp.edit().putInt("bubbleY", v.coerceAtLeast(0)).apply() }
+
+    var autoIntervalMs: Int
+        get() = sp.getInt("autoIntervalMs", 450).coerceIn(250, 1200)
+        set(v) { sp.edit().putInt("autoIntervalMs", v.coerceIn(250, 1200)).apply() }
+
     var mode: String
         get() = sp.getString("mode", "full") ?: "full"
         set(v) { sp.edit().putString("mode", v).apply() }
