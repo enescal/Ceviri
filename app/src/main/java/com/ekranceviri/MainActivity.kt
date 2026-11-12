@@ -612,12 +612,21 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun refreshRunningBubble() {
+    private val bubbleRefreshHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val bubbleRefreshTask = Runnable {
         try {
+            // Refresh once after the user finishes changing appearance controls.
             startService(Intent(this, OverlayService::class.java).setAction("com.ekranceviri.REFRESH_BUBBLE"))
         } catch (_: Exception) {
-            // The style is saved and will be applied the next time the overlay starts.
+            // Settings remain saved; the next overlay start applies them.
         }
+    }
+
+    private fun refreshRunningBubble() {
+        // SeekBars can emit dozens of callbacks while dragging. Debounce service starts
+        // to avoid repeatedly restarting/foreground-promoting the overlay service.
+        bubbleRefreshHandler.removeCallbacks(bubbleRefreshTask)
+        bubbleRefreshHandler.postDelayed(bubbleRefreshTask, 250L)
     }
 
     private fun start() {
