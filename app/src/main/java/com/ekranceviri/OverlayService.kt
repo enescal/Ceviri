@@ -718,21 +718,37 @@ class OverlayService : Service() {
             }
         }
 
-        // Fast path: Latin recognizer alone handles the common case.
-        // Only load/run the four script-specific recognizers when Latin OCR finds nothing.
-        try {
-            primary.process(input)
-                .addOnSuccessListener { result ->
-                    val latinItems = parse(result)
-                    if (latinItems.isNotEmpty()) {
-                        finish(latinItems)
-                    } else {
-                        runSpecialized()
-                    }
+        if (prefs.multilingualOcr) {
+            // Accuracy mode: run all script recognizers in parallel. This catches mixed
+            // English/Japanese/Korean/Chinese screens where Latin OCR alone would miss text.
+            val collected = java.util.Collections.synchronizedList(ArrayList<Item>())
+            val remaining = java.util.concurrent.atomic.AtomicInteger(recognizers.size)
+            for (recognizer in recognizers) {
+                try {
+                    recognizer.process(input)
+                        .addOnSuccessListener { result ->
+                            collected.addAll(parse(result))
+                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                        }
+                        .addOnFailureListener {
+                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                        }
+                } catch (_: Exception) {
+                    if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
                 }
-                .addOnFailureListener { runSpecialized() }
-        } catch (_: Exception) {
-            runSpecialized()
+            }
+        } else {
+            // Speed mode: Latin first, specialized recognizers only when Latin finds nothing.
+            try {
+                primary.process(input)
+                    .addOnSuccessListener { result ->
+                        val latinItems = parse(result)
+                        if (latinItems.isNotEmpty()) finish(latinItems) else runSpecialized()
+                    }
+                    .addOnFailureListener { runSpecialized() }
+            } catch (_: Exception) {
+                runSpecialized()
+            }
         }
 
 
