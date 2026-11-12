@@ -554,7 +554,6 @@ class MainActivity : Activity() {
         prefs.bubbleOpacity = sbBubbleOpacity.progress + 35
         prefs.autoIntervalMs = intArrayOf(250, 400, 650, 1000)[sbAutoInterval.progress.coerceIn(0, 3)]
         prefs.bubbleText = etBubbleLabel.text.toString()
-        refreshRunningBubble()
     }
 
 
