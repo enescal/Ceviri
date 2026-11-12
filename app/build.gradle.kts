@@ -10,8 +10,8 @@ android {
         minSdk = 26
         targetSdk = 34
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         // Keep only phone (ARM64) and CI emulator (x86_64) native binaries.
         ndk { abiFilters += setOf("arm64-v8a", "x86_64") }
     }
