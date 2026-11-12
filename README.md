@@ -13,6 +13,8 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 - Otomatik modda sayfa kaydırmasını takip etme
 - Türkçe sesli okuma
 - Çeviri görünümü için altı tema ve isteğe bağlı arka plan fotoğrafı
+- Yüzen baloncuk için daire/yuvarlak kare/kare şekilleri, renk, boyut, saydamlık ve yazı özelleştirmesi
+- Otomatik ekran taraması için 250–1000 ms arası ayarlanabilir kontrol aralığı
 - Belirli metinleri tekrar çevirmeme
 
 ## Kurulum
