@@ -40,6 +40,7 @@ object HyMtEngine {
     }
 
     fun isReady(context: Context): Boolean {
+        if (session != null && tokenizer != null) return true
         if (!hasInferenceMemory(context)) return false
         val dir = java.io.File(context.applicationContext.filesDir, "Translation/HY-MT")
         val model = java.io.File(dir, "model_int8_final.onnx")
