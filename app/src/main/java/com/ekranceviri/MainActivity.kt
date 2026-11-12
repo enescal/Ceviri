@@ -310,6 +310,29 @@ class MainActivity : Activity() {
         c3.addView(swAuto)
         c3.addView(swNames)
         c3.addView(swTts)
+
+        val accessibilityInfo = label(
+            "İsteğe bağlı: Normal uygulama yazılarını OCR kullanmadan okumayı dener. Oyun ve resim içindeki yazılarda ekran OCR modu kullanılır. Parola ve yazı giriş alanları atlanır.",
+            12f, false
+        )
+        c3.addView(accessibilityInfo)
+        val btnAccessibility = button("Erişilebilirlik metin çevirisini ayarla", false)
+        btnAccessibility.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Erişilebilirlik metin çevirisi")
+                .setMessage(
+                    "Bu izin, açık olan uygulamadaki görünür normal metin öğelerini okuyup Türkçeye çevirmek içindir. " +
+                    "Parola ve yazı giriş alanları atlanır. Oyunların çizim tabanlı yazıları bu yöntemle okunamaz; " +
+                    "onlar için mevcut ekran yakalama + OCR sistemi çalışmaya devam eder. " +
+                    "Özelliği yalnızca istersen Android Erişilebilirlik ayarlarından etkinleştir."
+                )
+                .setPositiveButton("Ayarları aç") { _, _ ->
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+                .setNegativeButton("Vazgeç", null)
+                .show()
+        }
+        c3.addView(btnAccessibility)
         val btnHistory = button("Son çevirileri göster", false)
         btnHistory.setOnClickListener { showTranslationHistory() }
         c3.addView(btnHistory)
