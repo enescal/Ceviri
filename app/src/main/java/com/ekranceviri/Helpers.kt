@@ -84,6 +84,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("auto", false)
         set(v) { sp.edit().putBoolean("auto", v).apply() }
 
+    // Accessibility text-tree translation is opt-in; never run merely because Android permission is enabled.
+    var accessibilityTranslationEnabled: Boolean
+        get() = sp.getBoolean("accessibilityTranslationEnabled", false)
+        set(v) { sp.edit().putBoolean("accessibilityTranslationEnabled", v).apply() }
+
     var tts: Boolean
         get() = sp.getBoolean("tts", false)
         set(v) { sp.edit().putBoolean("tts", v).apply() }
