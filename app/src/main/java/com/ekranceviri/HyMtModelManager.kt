@@ -99,6 +99,54 @@ class HyMtModelManager(context: Context) {
         }, "HY-MT-model-download").start()
     }
 
+
+    fun importArchive(source: java.io.InputStream, listener: Listener) {
+        Thread({
+            val archive = File(appContext.filesDir, "HY-MT-import.zip.part")
+            try {
+                modelDir.mkdirs()
+                listener.onProgress(Progress(0, ARCHIVE_SIZE, "HY-MT dosyası kopyalanıyor…"))
+                val digest = MessageDigest.getInstance("SHA-256")
+                var copied = 0L
+                source.use { input ->
+                    BufferedInputStream(input, 1024 * 1024).use { buffered ->
+                        FileOutputStream(archive).use { raw ->
+                            BufferedOutputStream(raw, 1024 * 1024).use { output ->
+                                val buffer = ByteArray(1024 * 1024)
+                                var read: Int
+                                var lastReport = 0L
+                                while (buffered.read(buffer).also { read = it } != -1) {
+                                    output.write(buffer, 0, read)
+                                    digest.update(buffer, 0, read)
+                                    copied += read
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastReport >= 500) {
+                                        listener.onProgress(Progress(copied, ARCHIVE_SIZE, "HY-MT dosyası kopyalanıyor…"))
+                                        lastReport = now
+                                    }
+                                }
+                                output.flush()
+                                raw.fd.sync()
+                            }
+                        }
+                    }
+                }
+                val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
+                if (!actualHash.equals(ARCHIVE_SHA256, ignoreCase = true)) {
+                    throw IllegalStateException("Seçilen ZIP dosyası HY-MT arşivi değil veya eksik. SHA-256 kontrolü başarısız.")
+                }
+                listener.onProgress(Progress(copied, copied, "Model dosyaları açılıyor…"))
+                extractRequiredFiles(archive, listener)
+                if (!isInstalled()) throw IllegalStateException("Model dosyaları eksik veya bozuk")
+                archive.delete()
+                listener.onComplete(true, "HY-MT dosyadan yüklendi ve doğrulandı.")
+            } catch (e: Exception) {
+                archive.delete()
+                listener.onComplete(false, e.message ?: "HY-MT dosyadan yüklenemedi")
+            }
+        }, "HY-MT-model-import").start()
+    }
+
     private fun extractRequiredFiles(archive: File, listener: Listener) {
         var modelDone = false
         var tokenizerDone = false
