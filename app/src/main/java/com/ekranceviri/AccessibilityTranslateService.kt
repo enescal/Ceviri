@@ -29,6 +29,7 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 class AccessibilityTranslateService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var wm: WindowManager
+    private lateinit var prefs: Prefs
     private val translators = HashMap<String, Translator>()
     private val languageIdentifier = LanguageIdentification.getClient()
     private val cache = LinkedHashMap<String, String>(160, 0.75f, true)
@@ -41,6 +42,7 @@ class AccessibilityTranslateService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        prefs = Prefs(this)
         serviceInfo = serviceInfo.apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
@@ -53,6 +55,14 @@ class AccessibilityTranslateService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        // This optional reader must never translate in the background unless explicitly enabled.
+        if (!prefs.accessibilityTranslationEnabled) {
+            handler.removeCallbacks(scanRunnable)
+            scanGeneration++
+            lastFingerprint = ""
+            clearOverlay()
+            return
+        }
         if (event.packageName?.toString() == packageName) {
             handler.removeCallbacks(scanRunnable)
             scanGeneration++
@@ -84,6 +94,12 @@ class AccessibilityTranslateService : AccessibilityService() {
     private data class TextNode(val text: String, val bounds: Rect)
 
     private fun scanVisibleText() {
+        if (!prefs.accessibilityTranslationEnabled) {
+            scanGeneration++
+            lastFingerprint = ""
+            clearOverlay()
+            return
+        }
         val root = rootInActiveWindow
         if (root == null) {
             scanGeneration++
