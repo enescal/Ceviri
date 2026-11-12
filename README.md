@@ -54,3 +54,9 @@ API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese aç�
 - OCR modellerinin ilk kurulumu için Google Play Hizmetleri ve internet bağlantısı gerekir. Modeller indirildikten sonra OCR cihaz üzerinde çalışır.
 - OCR ve çeviri kalitesi metnin yazı tipine, çözünürlüğüne ve seçilen motora göre değişir.
 - Otomatik mod, ekran hareketi bittikten sonra çeviri yapar; sürekli kayan içerikte beklemek gerekir.
+
+
+## Yeni ekran çeviri özellikleri (1.5)
+- İsteğe bağlı Android Accessibility metin okuma: normal erişilebilir metin düğümlerini OCR'sız çevirmeyi dener; parola ve düzenlenebilir alanları atlar. Oyun/canvas yazılarında MediaProjection OCR kullanılmaya devam eder.
+- Uzun basılan çeviri satırı için Gemini bağlamlı ikinci çeviri: aynı ekrandaki komşu OCR metinlerini bağlam olarak kullanır.
+- Gelişmiş çok dilli OCR: Latin, Çince, Devanagari, Japonca ve Korece tanıyıcılarını paralel çalıştırarak karışık alfabeli ekranlarda metin kaybını azaltır. Hız modu da korunur.
