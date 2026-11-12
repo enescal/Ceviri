@@ -15,6 +15,7 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 - Çeviri görünümü için altı tema ve isteğe bağlı arka plan fotoğrafı
 - Yüzen baloncuk için daire/yuvarlak kare/kare şekilleri, renk, boyut, saydamlık ve yazı özelleştirmesi
 - Otomatik ekran taraması için 250–1000 ms arası ayarlanabilir kontrol aralığı
+- Tek bir altyazı bölgesini kaydedip yalnızca o bölgedeki değişiklikleri otomatik izleme
 - Belirli metinleri tekrar çevirmeme
 
 ## Kurulum
@@ -29,7 +30,8 @@ Android için ekrandaki yazıları algılayıp Türkçeye çeviren, yüzen buton
 
 - **Ç butonuna kısa bas:** Ekranı çevirir.
 - **Ç butonuna çift dokun:** Otomatik çeviriyi açar/kapatır.
-- **Ç butonuna uzun bas:** Çevrilecek alanları parmağınla çizip **Bitti**'ye bas.
+- **Ç butonuna uzun bas:** Alan düzenleyicisini aç. Normal alan çevirisi için bölgeleri çizip **Bitti**'ye bas.
+- **Altyazı takibi:** Alan düzenleyicisinde **Altyazı alanı seç** düğmesine bas, altyazının bulunduğu tek dikdörtgeni çiz ve **Bitti**'ye bas. Uygulama otomatik takibi başlatır; yalnızca seçilen bölgedeki altyazı değişikliklerini izler. Baloncuğa çift dokunarak takibi durdurabilirsin.
 - Çeviri kutusuna uzun bas: O metni bir daha çevirmeme listesine ekler.
 
 ## Çeviri motorları
@@ -56,7 +58,10 @@ API anahtarları cihazın uygulama ayarlarında saklanır. Bunları herkese aç�
 - Otomatik mod, ekran hareketi bittikten sonra çeviri yapar; sürekli kayan içerikte beklemek gerekir.
 
 
-## Yeni ekran çeviri özellikleri (1.5)
+## Yeni ekran çeviri özellikleri (1.6)
+- Altyazı takibi: kullanıcı bir altyazı dikdörtgeni seçer; ekranın tamamı yerine yalnızca bu alanın görüntü parmak izi izlenir. Altyazı değişince temiz ekran karesi OCR ile okunur ve yeniden çevrilir. Çeviri katmanı yakalama sırasında gizlenerek kendi kendini tetikleyen döngü engellenir.
+
+## Önceki ekran çeviri özellikleri (1.5)
 - İsteğe bağlı Android Accessibility metin okuma: normal erişilebilir metin düğümlerini OCR'sız çevirmeyi dener; parola ve düzenlenebilir alanları atlar. Oyun/canvas yazılarında MediaProjection OCR kullanılmaya devam eder.
 - Uzun basılan çeviri satırı için Gemini bağlamlı ikinci çeviri: aynı ekrandaki komşu OCR metinlerini bağlam olarak kullanır.
 - Gelişmiş çok dilli OCR: Latin, Çince, Devanagari, Japonca ve Korece tanıyıcılarını paralel çalıştırarak karışık alfabeli ekranlarda metin kaybını azaltır. Hız modu da korunur.
