@@ -52,13 +52,22 @@ class AccessibilityTranslateService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || event.packageName?.toString() == packageName) return
+        if (event == null) return
+        if (event.packageName?.toString() == packageName) {
+            handler.removeCallbacks(scanRunnable)
+            scanGeneration++
+            lastFingerprint = ""
+            clearOverlay()
+            return
+        }
         handler.removeCallbacks(scanRunnable)
         handler.postDelayed(scanRunnable, 450)
     }
 
     override fun onInterrupt() {
         handler.removeCallbacks(scanRunnable)
+        scanGeneration++
+        lastFingerprint = ""
         clearOverlay()
     }
 
@@ -110,7 +119,15 @@ class AccessibilityTranslateService : AccessibilityService() {
             val cached = synchronized(cache) { cache[node.text] }
             if (cached != null) {
                 translated.add(node to cached)
-                if (remaining.decrementAndGet() == 0) handler.post { render(translated.toList()) }
+                if (remaining.decrementAndGet() == 0) handler.post {
+                    if (generation == scanGeneration) {
+                        val completed = translated.toList()
+                        if (completed.isEmpty()) {
+                            lastFingerprint = ""
+                            clearOverlay()
+                        } else render(completed)
+                    }
+                }
             } else {
                 translateNode(node) { result ->
                     if (!result.isNullOrBlank()) {
