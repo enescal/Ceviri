@@ -68,7 +68,7 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putInt("bubbleY", v.coerceAtLeast(0)).apply() }
 
     var autoIntervalMs: Int
-        get() = sp.getInt("autoIntervalMs", 450).coerceIn(250, 1200)
+        get() = sp.getInt("autoIntervalMs", 400).coerceIn(250, 1200)
         set(v) { sp.edit().putInt("autoIntervalMs", v.coerceIn(250, 1200)).apply() }
 
     var mode: String
