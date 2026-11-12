@@ -738,24 +738,27 @@ class OverlayService : Service() {
         }
 
         if (prefs.multilingualOcr) {
-            // Accuracy mode: run all script recognizers in parallel. This catches mixed
-            // English/Japanese/Korean/Chinese screens where Latin OCR alone would miss text.
-            val collected = java.util.Collections.synchronizedList(ArrayList<Item>())
-            val remaining = java.util.concurrent.atomic.AtomicInteger(recognizers.size)
-            for (recognizer in recognizers) {
+            // Run recognizers one by one. Parallel full-screen OCR can multiply native
+            // memory usage and make Android kill the overlay service on mid-range phones.
+            val collected = ArrayList<Item>()
+            fun runNext(index: Int) {
+                if (finished) return
+                if (index >= recognizers.size) {
+                    finish(mergeOcrItems(collected))
+                    return
+                }
                 try {
-                    recognizer.process(input)
+                    recognizers[index].process(input)
                         .addOnSuccessListener { result ->
                             collected.addAll(parse(result))
-                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                            runNext(index + 1)
                         }
-                        .addOnFailureListener {
-                            if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
-                        }
+                        .addOnFailureListener { runNext(index + 1) }
                 } catch (_: Exception) {
-                    if (remaining.decrementAndGet() == 0) finish(mergeOcrItems(collected))
+                    runNext(index + 1)
                 }
             }
+            runNext(0)
         } else {
             // Speed mode: Latin first, specialized recognizers only when Latin finds nothing.
             try {
@@ -1189,9 +1192,15 @@ class OverlayService : Service() {
         bp.gravity = Gravity.TOP
         bp.topMargin = statusBarH
         root.addView(bar, bp)
-        wm.addView(root, fullParams(true))
-        editor = root
-        bringButtonToFront()
+        try {
+            wm.addView(root, fullParams(true))
+            editor = root
+            bringButtonToFront()
+        } catch (e: Exception) {
+            editor = null
+            subtitleSelectionArmed = false
+            toast("Alan seçme penceresi açılamadı")
+        }
     }
 
     private fun closeEditor(areas: List<Rect>) {
@@ -1355,7 +1364,14 @@ class OverlayService : Service() {
                     }
                     lp.x = startX + dx
                     lp.y = startY + dy
-                    wm.updateViewLayout(btn, lp)
+                    try {
+                        wm.updateViewLayout(btn, lp)
+                    } catch (_: IllegalArgumentException) {
+                        // The overlay may have been detached while the finger was moving.
+                        handler.removeCallbacks(longPress)
+                    } catch (_: SecurityException) {
+                        handler.removeCallbacks(longPress)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -1394,8 +1410,14 @@ class OverlayService : Service() {
                 else -> false
             }
         }
-        wm.addView(btn, lp)
-        button = btn
+        try {
+            wm.addView(btn, lp)
+            button = btn
+        } catch (e: Exception) {
+            button = null
+            toast("Yüzen baloncuk açılamadı")
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {
