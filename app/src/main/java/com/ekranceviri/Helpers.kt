@@ -71,6 +71,11 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("autoIntervalMs", 400).coerceIn(250, 1200)
         set(v) { sp.edit().putInt("autoIntervalMs", v.coerceIn(250, 1200)).apply() }
 
+    // Run Latin + CJK + Devanagari OCR together to avoid losing mixed-script screens.
+    var multilingualOcr: Boolean
+        get() = sp.getBoolean("multilingualOcr", true)
+        set(v) { sp.edit().putBoolean("multilingualOcr", v).apply() }
+
     var mode: String
         get() = sp.getString("mode", "full") ?: "full"
         set(v) { sp.edit().putString("mode", v).apply() }
