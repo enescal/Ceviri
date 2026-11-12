@@ -36,7 +36,7 @@ object HyMtEngine {
         val manager = context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
         val memory = ActivityManager.MemoryInfo()
         manager.getMemoryInfo(memory)
-        return !memory.lowMemory && memory.availMem >= 2_500_000_000L
+        return !memory.lowMemory && memory.availMem >= 4_000_000_000L
     }
 
     fun isReady(context: Context): Boolean {
@@ -54,6 +54,9 @@ object HyMtEngine {
         if (session != null && tokenizer != null) return
         synchronized(lock) {
             if (session != null && tokenizer != null) return
+            check(hasInferenceMemory(context)) {
+                "HY-MT için en az 4 GB kullanılabilir bellek gerekiyor; ML Kit çevrimdışı yedeği kullanılmalı"
+            }
             val dir = java.io.File(context.applicationContext.filesDir, "Translation/HY-MT")
             val model = java.io.File(dir, "model_int8_final.onnx")
             val vocab = java.io.File(dir, "tokenizer.json")
