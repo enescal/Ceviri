@@ -640,21 +640,28 @@ class OverlayService : Service() {
             done()
             return
         }
+        // Process selected areas one at a time. Starting OCR for every crop at once
+        // multiplies native recognizer memory and can kill the foreground service.
         val all = ArrayList<Item>()
-        val lock = Any()
-        var left = regs.size
-        for (r in regs) {
-            val crop = Bitmap.createBitmap(bmp, r.left, r.top, r.width(), r.height())
-            ocr(crop, r.left, r.top) { items ->
-                val complete: List<Item>?
-                synchronized(lock) {
+        fun processRegion(index: Int) {
+            if (index >= regs.size) {
+                afterOcr(bmp, all, auto)
+                return
+            }
+            val region = regs[index]
+            try {
+                val crop = Bitmap.createBitmap(
+                    bmp, region.left, region.top, region.width(), region.height()
+                )
+                ocr(crop, region.left, region.top) { items ->
                     all.addAll(items)
-                    left--
-                    complete = if (left == 0) ArrayList(all) else null
+                    processRegion(index + 1)
                 }
-                if (complete != null) afterOcr(bmp, complete, auto)
+            } catch (_: Exception) {
+                processRegion(index + 1)
             }
         }
+        processRegion(0)
     }
 
     private fun mergeOcrItems(items: List<Item>): List<Item> {
