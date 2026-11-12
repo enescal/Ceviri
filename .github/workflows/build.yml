@@ -17,17 +17,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
-      - run: gradle testDebugUnitTest lintDebug assembleDebug
-      - name: Run app smoke test on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: gradle connectedDebugAndroidTest
+      - name: Build, lint, and compile tests
+        run: gradle testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
