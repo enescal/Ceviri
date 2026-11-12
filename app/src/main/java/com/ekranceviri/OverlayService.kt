@@ -941,6 +941,7 @@ class OverlayService : Service() {
             val item = items[i]
             val r = item.rect
             val tr = result[i] ?: item.text
+            prefs.addHistory(item.text, tr)
             val bgC = sampleColor(bmp, r)
             val lum = 0.299 * Color.red(bgC) + 0.587 * Color.green(bgC) + 0.114 * Color.blue(bgC)
             val maxPx = (r.height().toFloat() / item.lines * 0.7f).coerceIn(24f, 64f)
@@ -954,7 +955,11 @@ class OverlayService : Service() {
                 16, maxPx.toInt(), 2, TypedValue.COMPLEX_UNIT_PX
             )
             if (!auto) {
-                tv.setOnClickListener { dismissOverlay() }
+                tv.setOnClickListener {
+                    val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Çeviri", tr))
+                    toast("Çeviri kopyalandı")
+                }
                 tv.setOnLongClickListener {
                     prefs.addIgnored(norm(item.text))
                     root.removeView(tv)
