@@ -23,6 +23,7 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -42,6 +43,14 @@ class MainActivity : Activity() {
     private lateinit var rbArea: RadioButton
     private lateinit var swTts: Switch
     private lateinit var swNames: Switch
+    private lateinit var rgBubbleShape: RadioGroup
+    private lateinit var sbBubbleSize: SeekBar
+    private lateinit var sbBubbleOpacity: SeekBar
+    private lateinit var sbAutoInterval: SeekBar
+    private lateinit var etBubbleLabel: EditText
+    private lateinit var tvBubbleSize: TextView
+    private lateinit var tvBubbleOpacity: TextView
+    private lateinit var tvAutoInterval: TextView
     private var ready = false
 
     private var cText = Color.WHITE
@@ -308,6 +317,63 @@ class MainActivity : Activity() {
         }
         c3.addView(btnClear)
 
+        // Yüzen baloncuk kişiselleştirme
+        val cBubble = card(root, "Yüzen baloncuk")
+        cBubble.addView(label("Baloncuk şekli", 14f, true))
+        rgBubbleShape = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        rgBubbleShape.addView(radio("Daire", 401))
+        rgBubbleShape.addView(radio("Yuvarlak kare", 402))
+        rgBubbleShape.addView(radio("Kare", 403))
+        cBubble.addView(rgBubbleShape)
+
+        val palette = linkedMapOf(
+            "Mavi" to 0xFF4F6BED.toInt(),
+            "Mor" to 0xFF8B5CF6.toInt(),
+            "Turkuaz" to 0xFF00A6A6.toInt(),
+            "Yeşil" to 0xFF22A06B.toInt(),
+            "Turuncu" to 0xFFF08032.toInt(),
+            "Pembe" to 0xFFE64A88.toInt(),
+            "Kırmızı" to 0xFFE53935.toInt(),
+            "Beyaz" to 0xFFF2F2F2.toInt()
+        )
+        val colorButton = button("Baloncuk rengini seç", false)
+        colorButton.setOnClickListener {
+            val entries = palette.keys.toTypedArray()
+            val selected = palette.values.indexOf(prefs.bubbleColor).coerceAtLeast(0)
+            AlertDialog.Builder(this)
+                .setTitle("Baloncuk rengi")
+                .setSingleChoiceItems(entries, selected) { dialog, which ->
+                    prefs.bubbleColor = palette.values.elementAt(which)
+                    colorButton.text = "Baloncuk rengi: ${entries[which]}"
+                    refreshRunningBubble()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Vazgeç", null)
+                .show()
+        }
+        cBubble.addView(colorButton)
+
+        cBubble.addView(label("Baloncuk boyutu", 14f, true))
+        tvBubbleSize = label("", 12f, false)
+        cBubble.addView(tvBubbleSize)
+        sbBubbleSize = SeekBar(this).apply { max = 40 }
+        cBubble.addView(sbBubbleSize)
+
+        cBubble.addView(label("Baloncuk saydamlığı", 14f, true))
+        tvBubbleOpacity = label("", 12f, false)
+        cBubble.addView(tvBubbleOpacity)
+        sbBubbleOpacity = SeekBar(this).apply { max = 65 }
+        cBubble.addView(sbBubbleOpacity)
+
+        etBubbleLabel = edit("Baloncuk yazısı (Ç, T, vb.)")
+        cBubble.addView(etBubbleLabel)
+
+        cBubble.addView(label("Otomatik tarama hızı", 14f, true))
+        tvAutoInterval = label("", 12f, false)
+        cBubble.addView(tvAutoInterval)
+        sbAutoInterval = SeekBar(this).apply { max = 3 }
+        cBubble.addView(sbAutoInterval)
+
         // Görünüm
         val c4 = card(root, "Görünüm")
         val g3 = RadioGroup(this)
@@ -355,6 +421,48 @@ class MainActivity : Activity() {
         loadAll()
         ready = true
 
+        rgBubbleShape.setOnCheckedChangeListener { _, id ->
+            prefs.bubbleShape = when (id) {
+                402 -> "rounded"
+                403 -> "square"
+                else -> "circle"
+            }
+            refreshRunningBubble()
+        }
+        sbBubbleSize.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                prefs.bubbleSize = progress + 40
+                tvBubbleSize.text = "${prefs.bubbleSize} dp"
+                if (fromUser) refreshRunningBubble()
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        sbBubbleOpacity.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                prefs.bubbleOpacity = progress + 35
+                tvBubbleOpacity.text = "%${prefs.bubbleOpacity}"
+                if (fromUser) refreshRunningBubble()
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        sbAutoInterval.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            private val intervals = intArrayOf(250, 400, 650, 1000)
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                prefs.autoIntervalMs = intervals[progress.coerceIn(0, intervals.lastIndex)]
+                tvAutoInterval.text = "${prefs.autoIntervalMs} ms"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        etBubbleLabel.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                prefs.bubbleText = etBubbleLabel.text.toString()
+                refreshRunningBubble()
+            }
+        }
+
         g3.setOnCheckedChangeListener { _, id ->
             val n = id - 301
             if (n in Themes.names.indices && n != prefs.theme) {
@@ -387,6 +495,23 @@ class MainActivity : Activity() {
         rbFull.isChecked = prefs.mode != "area"
         swTts.isChecked = prefs.tts
         swNames.isChecked = prefs.protectNames
+        rgBubbleShape.check(when (prefs.bubbleShape) {
+            "rounded" -> 402
+            "square" -> 403
+            else -> 401
+        })
+        sbBubbleSize.progress = prefs.bubbleSize - 40
+        sbBubbleOpacity.progress = prefs.bubbleOpacity - 35
+        sbAutoInterval.progress = when {
+            prefs.autoIntervalMs <= 300 -> 0
+            prefs.autoIntervalMs <= 500 -> 1
+            prefs.autoIntervalMs <= 800 -> 2
+            else -> 3
+        }
+        etBubbleLabel.setText(prefs.bubbleText)
+        tvBubbleSize.text = "${prefs.bubbleSize} dp"
+        tvBubbleOpacity.text = "%${prefs.bubbleOpacity}"
+        tvAutoInterval.text = "${prefs.autoIntervalMs} ms"
     }
 
     private fun saveAll() {
@@ -403,6 +528,24 @@ class MainActivity : Activity() {
         prefs.mode = if (rbArea.isChecked) "area" else "full"
         prefs.tts = swTts.isChecked
         prefs.protectNames = swNames.isChecked
+        prefs.bubbleShape = when (rgBubbleShape.checkedRadioButtonId) {
+            402 -> "rounded"
+            403 -> "square"
+            else -> "circle"
+        }
+        prefs.bubbleSize = sbBubbleSize.progress + 40
+        prefs.bubbleOpacity = sbBubbleOpacity.progress + 35
+        prefs.autoIntervalMs = intArrayOf(250, 400, 650, 1000)[sbAutoInterval.progress.coerceIn(0, 3)]
+        prefs.bubbleText = etBubbleLabel.text.toString()
+    }
+
+
+    private fun refreshRunningBubble() {
+        try {
+            startService(Intent(this, OverlayService::class.java).setAction("com.ekranceviri.REFRESH_BUBBLE"))
+        } catch (_: Exception) {
+            // The style is saved and will be applied the next time the overlay starts.
+        }
     }
 
     private fun start() {
