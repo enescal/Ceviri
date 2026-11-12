@@ -179,6 +179,10 @@ class OverlayService : Service() {
             return START_NOT_STICKY
         }
         startAsForeground()
+        if (intent.action == "com.ekranceviri.REFRESH_BUBBLE") {
+            if (projection != null) applyButtonAppearance() else stopSelf()
+            return START_NOT_STICKY
+        }
         val data = intent.getParcelableExtra<Intent>("data")
         if (data == null || projection != null) return START_NOT_STICKY
         val code = intent.getIntExtra("code", 0)
@@ -194,6 +198,12 @@ class OverlayService : Service() {
         statusBarH = if (id > 0) resources.getDimensionPixelSize(id) else 0
         setupCapture()
         addButton()
+        autoOn = prefs.auto
+        updateButtonLook()
+        if (autoOn) {
+            resetAutoState()
+            handler.postDelayed(autoRunnable, prefs.autoIntervalMs.toLong())
+        }
         return START_NOT_STICKY
     }
 
@@ -312,7 +322,7 @@ class OverlayService : Service() {
         busy = false
         restoreViews()
         handler.removeCallbacks(autoRunnable)
-        if (autoOn) handler.postDelayed(autoRunnable, if (overlay != null) 350L else 500L)
+        if (autoOn) handler.postDelayed(autoRunnable, prefs.autoIntervalMs.toLong())
     }
 
     private fun resetAutoState() {
@@ -360,7 +370,7 @@ class OverlayService : Service() {
     private fun autoTick() {
         if (!autoOn) return
         if (busy || editor != null) {
-            handler.postDelayed(autoRunnable, 600)
+            handler.postDelayed(autoRunnable, prefs.autoIntervalMs.toLong())
             return
         }
         busy = true
@@ -1102,14 +1112,54 @@ class OverlayService : Service() {
     // ---------- Buton ----------
 
     private fun idleColor(): Int {
-        val a = Themes.accent(prefs.theme)
-        return Color.argb(190, Color.red(a), Color.green(a), Color.blue(a))
+        val chosen = prefs.bubbleColor
+        return Color.argb(
+            (prefs.bubbleOpacity * 255 / 100).coerceIn(0, 255),
+            Color.red(chosen), Color.green(chosen), Color.blue(chosen)
+        )
+    }
+
+    private fun activeColor(): Int {
+        return Color.argb(
+            (prefs.bubbleOpacity * 255 / 100).coerceIn(0, 255),
+            20, 160, 70
+        )
+    }
+
+    private fun bubbleBackground(color: Int): GradientDrawable {
+        val bg = GradientDrawable()
+        val px = prefs.bubbleSize * resources.displayMetrics.density
+        when (prefs.bubbleShape) {
+            "rounded" -> {
+                bg.shape = GradientDrawable.RECTANGLE
+                bg.cornerRadius = px * 0.28f
+            }
+            "square" -> {
+                bg.shape = GradientDrawable.RECTANGLE
+                bg.cornerRadius = px * 0.08f
+            }
+            else -> bg.shape = GradientDrawable.OVAL
+        }
+        bg.setColor(color)
+        return bg
     }
 
     private fun updateButtonLook() {
-        (button?.background as? GradientDrawable)?.setColor(
-            if (autoOn) Color.argb(220, 20, 160, 70) else idleColor()
-        )
+        button?.background = bubbleBackground(if (autoOn) activeColor() else idleColor())
+    }
+
+    private fun applyButtonAppearance() {
+        val btn = button ?: return
+        val px = (prefs.bubbleSize * resources.displayMetrics.density).toInt()
+        lp.width = px
+        lp.height = px
+        btn.text = prefs.bubbleText
+        btn.textSize = (prefs.bubbleSize * 0.36f).coerceIn(14f, 28f)
+        updateButtonLook()
+        try {
+            wm.updateViewLayout(btn, lp)
+        } catch (_: Exception) {
+        }
     }
 
     private fun toggleAuto() {
@@ -1121,7 +1171,7 @@ class OverlayService : Service() {
         resetAutoState()
         if (autoOn) {
             toast("Otomatik çeviri açık (buton yeşil)")
-            handler.postDelayed(autoRunnable, 300)
+            handler.postDelayed(autoRunnable, prefs.autoIntervalMs.toLong())
         } else {
             dismissOverlay()
             toast("Otomatik çeviri kapalı")
@@ -1139,15 +1189,12 @@ class OverlayService : Service() {
 
     private fun addButton() {
         val btn = TextView(this)
-        btn.text = "Ç"
-        btn.textSize = 20f
+        btn.text = prefs.bubbleText
+        btn.textSize = (prefs.bubbleSize * 0.36f).coerceIn(14f, 28f)
         btn.setTextColor(Color.WHITE)
         btn.gravity = Gravity.CENTER
-        val bg = GradientDrawable()
-        bg.shape = GradientDrawable.OVAL
-        bg.setColor(idleColor())
-        btn.background = bg
-        val size = (56 * resources.displayMetrics.density).toInt()
+        btn.background = bubbleBackground(idleColor())
+        val size = (prefs.bubbleSize * resources.displayMetrics.density).toInt()
         lp = WindowManager.LayoutParams(
             size, size,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -1156,8 +1203,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.TOP or Gravity.START
-        lp.x = 0
-        lp.y = 300
+        lp.x = if (prefs.bubbleX >= 0) prefs.bubbleX.coerceIn(0, max(0, width - size)) else 0
+        lp.y = if (prefs.bubbleY >= 0) prefs.bubbleY.coerceIn(0, max(0, height - size)) else 300
         var startX = 0
         var startY = 0
         var touchX = 0f
@@ -1197,6 +1244,16 @@ class OverlayService : Service() {
                 }
                 MotionEvent.ACTION_UP -> {
                     handler.removeCallbacks(longPress)
+                    if (moved) {
+                        val maxX = max(0, width - lp.width)
+                        val maxY = max(0, height - lp.height)
+                        // Dock the bubble to the nearest screen edge and remember its position.
+                        lp.x = if (lp.x + lp.width / 2 < width / 2) 0 else maxX
+                        lp.y = lp.y.coerceIn(0, maxY)
+                        prefs.bubbleX = lp.x
+                        prefs.bubbleY = lp.y
+                        try { wm.updateViewLayout(btn, lp) } catch (_: Exception) {}
+                    }
                     if (!moved && !longFired) {
                         val now = System.currentTimeMillis()
                         if (now - lastTap < 350) {
