@@ -397,6 +397,18 @@ class OverlayService : Service() {
         val fp = fingerprint(bmp, regs)
 
         if (overlay != null) {
+            if (prefs.mode == "subtitle") {
+                // Watch only the selected caption rectangle, ignoring movement elsewhere.
+                val handledSubtitle = handledFp
+                if (handledSubtitle != null && changed(handledSubtitle, fp)) {
+                    dismissOverlay()
+                    handledFp = null
+                    prevFp = fp
+                }
+                if (!bmp.isRecycled) bmp.recycle()
+                done()
+                return
+            }
             trackOverlay(bmp)
             if (!bmp.isRecycled) bmp.recycle()
             return
@@ -565,6 +577,11 @@ class OverlayService : Service() {
     }
 
     private fun regions(): List<Rect> {
+        if (prefs.mode == "subtitle") {
+            val a = prefs.areas().firstOrNull() ?: return emptyList()
+            val r = Rect(max(0, a.left), max(0, a.top), min(width, a.right), min(height, a.bottom))
+            return if (r.width() > 30 && r.height() > 30) listOf(r) else emptyList()
+        }
         if (prefs.mode == "area") {
             val out = ArrayList<Rect>()
             for (a in prefs.areas()) {
@@ -1139,6 +1156,16 @@ class OverlayService : Service() {
         hint.textSize = 14f
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
+        val subtitle = Button(this)
+        subtitle.text = "Altyazı alanı seç"
+        subtitle.setOnClickListener {
+            areas.clear()
+            prefs.mode = "subtitle"
+            av.invalidate()
+            hint.text = "Altyazının bulunduğu tek alanı çiz. Bu alan sürekli izlenecek."
+            subtitle.text = "Altyazı alanı seçildi"
+            subtitle.isEnabled = false
+        }
         val clear = Button(this)
         clear.text = "Alanları sil"
         clear.setOnClickListener {
@@ -1148,6 +1175,7 @@ class OverlayService : Service() {
         val ok = Button(this)
         ok.text = "Bitti"
         ok.setOnClickListener { closeEditor(areas) }
+        row.addView(subtitle)
         row.addView(clear)
         row.addView(ok)
         bar.addView(hint)
@@ -1174,7 +1202,16 @@ class OverlayService : Service() {
         }
         editor = null
         resetAutoState()
-        toast(if (areas.isEmpty()) "Alan yok: tüm ekran çevrilecek" else "${areas.size} alan kaydedildi")
+        if (prefs.mode == "subtitle" && areas.isNotEmpty()) {
+            autoOn = true
+            prefs.auto = true
+            handler.removeCallbacks(autoRunnable)
+            updateButtonLook()
+            toast("Altyazı takibi açık: seçilen alan değiştikçe çevrilecek")
+            handler.postDelayed(autoRunnable, 300L)
+        } else {
+            toast(if (areas.isEmpty()) "Alan yok: tüm ekran çevrilecek" else "${areas.size} alan kaydedildi")
+        }
     }
 
     // ---------- Buton ----------
